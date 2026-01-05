@@ -1,0 +1,63 @@
+#依赖目录
+node_modules/
+.pnpm-store/
+
+# Next.js 构建输出
+.next/
+out/
+dist/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# 数据库
+data/*.db
+data/*.db-journal
+
+# 日志
+*.log
+logs/
+
+# 环境和配置
+.env
+.env.local
+.env.*.local
+config.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 测试覆盖率
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+
+# 项目特定排除
+.roo/
+.kilocode/
+docs/
+plans/
+plugins/*.js
+!plugins/.gitkeep
+
+# TypeScript
+*.tsbuildinfo
