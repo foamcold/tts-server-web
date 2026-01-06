@@ -5,12 +5,12 @@ import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/ui/page-header'
 import { Button } from '@/components/ui/button'
 import { Icons } from '@/components/ui/icons'
-import { ProfileForm, PasswordForm, SystemInfoCard } from '@/components/settings'
+import { ProfileForm, PasswordForm } from '@/components/settings'
 
 /**
  * 设置页面标签类型
  */
-type SettingsTab = 'profile' | 'security' | 'system'
+type SettingsTab = 'profile' | 'security'
 
 /**
  * 标签配置
@@ -28,17 +28,11 @@ const tabs: { id: SettingsTab; label: string; icon: keyof typeof Icons; descript
     icon: 'shield',
     description: '修改密码和安全选项',
   },
-  {
-    id: 'system',
-    label: '系统信息',
-    icon: 'settings',
-    description: '查看系统状态和版本',
-  },
 ]
 
 /**
  * 设置页面
- *提供个人资料、安全设置和系统信息的管理界面
+ * 提供个人资料和安全设置的管理界面
  */
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
@@ -48,7 +42,7 @@ export default function SettingsPage() {
       {/* 页面标题 */}
       <PageHeader
         title="设置"
-        description="管理个人资料、安全设置和查看系统信息"
+        description="管理个人资料和安全设置"
       />
 
       <div className="flex flex-col lg:flex-row gap-6">
@@ -60,14 +54,15 @@ export default function SettingsPage() {
             return (
               <Button
                 key={tab.id}
-                variant={isActive ?'secondary' : 'ghost'}
+                variant={isActive ? 'secondary' : 'ghost'}
                 className={cn(
                   'w-full justify-start h-auto py-3 px-4',
                   isActive && 'bg-muted'
                 )}
                 onClick={() => setActiveTab(tab.id)}
               >
-                <Icon className="mr-3 h-4 w-4 shrink-0" /><div className="text-left">
+                <Icon className="mr-3 h-4 w-4 shrink-0" />
+                <div className="text-left">
                   <div className="font-medium">{tab.label}</div>
                   <div className="text-xs text-muted-foreground font-normal">
                     {tab.description}
@@ -82,7 +77,6 @@ export default function SettingsPage() {
         <div className="flex-1 max-w-2xl">
           {activeTab === 'profile' && <ProfileForm />}
           {activeTab === 'security' && <PasswordForm />}
-          {activeTab === 'system' && <SystemInfoCard />}
         </div>
       </div>
     </div>

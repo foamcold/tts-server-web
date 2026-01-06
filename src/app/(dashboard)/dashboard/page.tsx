@@ -1,6 +1,6 @@
 /**
  * 仪表盘页面
- *展示系统概览、统计信息和快捷操作
+ * 展示系统概览、统计信息和快捷操作
  */
 'use client'
 
@@ -8,7 +8,6 @@ import { Package, Sliders, FileText, Code } from 'lucide-react'
 import { StatCard } from '@/components/dashboard/stat-card'
 import { QuickActions } from '@/components/dashboard/quick-actions'
 import { WelcomeCard } from '@/components/dashboard/welcome-card'
-import { SystemStatus } from '@/components/dashboard/system-status'
 import { useDashboardStats } from '@/hooks/use-dashboard'
 
 export default function DashboardPage() {
@@ -51,15 +50,8 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* 快捷操作 & 系统状态 */}
-      <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <QuickActions />
-        </div>
-        <div>
-          <SystemStatus />
-        </div>
-      </div>
+      {/* 快捷操作 */}
+      <QuickActions />
     </div>
   )
 }

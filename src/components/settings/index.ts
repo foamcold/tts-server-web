@@ -4,4 +4,3 @@
  */
 export { ProfileForm } from './profile-form'
 export { PasswordForm } from './password-form'
-export { SystemInfoCard } from './system-info-card'

@@ -41,7 +41,7 @@ const actions: QuickAction[] = [
   {
     title: '替换规则',
     description: '管理文本替换',
-    href: '/rules/replace',
+    href: '/rules',
     icon: FileText,
     color: 'bg-green-500/10 text-green-600',
   },

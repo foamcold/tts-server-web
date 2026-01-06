@@ -34,9 +34,15 @@ interface AuthState {
   setHasHydrated: (state: boolean) => void
 }
 
+/** 水合超时时间（毫秒） */
+const HYDRATION_TIMEOUT = 3000
+
+/** 检测是否为客户端环境（浏览器） */
+const isClient = typeof window !== 'undefined'
+
 /**
  * 认证状态管理
- *使用 zustand 进行状态管理，并持久化到 localStorage
+ * 使用 zustand 进行状态管理，并持久化到 localStorage
  */
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -50,14 +56,14 @@ export const useAuthStore = create<AuthState>()(
       },
       setAuth: (user, token) => {
         // 同时保存到 localStorage，方便 API 请求使用
-        if (typeof window !== 'undefined') {
+        if (isClient) {
           localStorage.setItem('token', token)
         }
         set({ user, token, isAuthenticated: true })
       },
       logout: () => {
         // 清除 localStorage 中的令牌
-        if (typeof window !== 'undefined') {
+        if (isClient) {
           localStorage.removeItem('token')
           
           // 清除 React Query 缓存，防止切换账号后看到旧数据
@@ -76,10 +82,44 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
-      onRehydrateStorage: () => (state) => {
-        // 水合完成时设置标志
-        state?.setHasHydrated(true)
+      // 跳过服务端渲染时的水合（服务端没有 localStorage）
+      skipHydration: !isClient,
+      onRehydrateStorage: () => (state, error) => {
+        // 服务端环境下不输出警告日志（这是预期行为）
+        if (!isClient) {
+          // 服务端直接设置水合完成，因为不需要从 localStorage 读取
+          useAuthStore.getState().setHasHydrated(true)
+          return
+        }
+
+        // 处理水合错误（仅客户端）
+        if (error) {
+          console.error('[AuthStore] 水合失败:', error)
+          // 即使失败也要设置水合完成，避免永久卡住
+          useAuthStore.getState().setHasHydrated(true)
+          return
+        }
+        
+        // 正常水合完成时设置标志
+        if (state) {
+          state.setHasHydrated(true)
+        } else {
+          // state 为 undefined 时（例如首次访问无数据），也需要设置水合完成
+          // 首次访问是正常情况，不需要 warn 级别日志
+          useAuthStore.getState().setHasHydrated(true)
+        }
       },
     }
   )
 )
+
+// 水合超时保护：仅在客户端启用
+// 防止 onRehydrateStorage 因某些原因不被调用导致永久卡住
+if (isClient) {
+  setTimeout(() => {
+    if (!useAuthStore.getState().hasHydrated) {
+      console.warn('[AuthStore] 水合超时，强制完成水合')
+      useAuthStore.getState().setHasHydrated(true)
+    }
+  }, HYDRATION_TIMEOUT)
+}
