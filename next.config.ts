@@ -3,8 +3,8 @@ import type { NextConfig } from 'next'
 const isProd = process.env.NODE_ENV === 'production'
 
 const nextConfig: NextConfig = {
-  // 生产构建输出为静态文件
-  output: 'export',
+  // 仅在生产环境启用静态文件导出
+  ...(isProd && { output: 'export' }),
   // 静态文件输出目录
   distDir: 'dist',
   // 配置后端API代理（仅开发环境生效，生产环境由后端处理）

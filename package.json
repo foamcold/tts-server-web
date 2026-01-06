@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "python run.py",
+    "start": "python start.py",
     "lint": "next lint",
-    "api": "python -c \"import uvicorn; from api.config import config; uvicorn.run('api.main:app', host=config.server.host, port=config.server.port, reload=True)\""
+    "api": "python start-dev.py"
   },
   "keywords": [
     "tts",
