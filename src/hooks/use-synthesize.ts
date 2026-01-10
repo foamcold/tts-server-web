@@ -30,7 +30,8 @@ export interface SynthesizeRequest {
 export interface TtsConfig {
   id: number
   name: string
-  plugin_id: number
+  /** 插件标识符（字符串，如 "xfpeiyin.Mr.Wang"），不是数据库 ID */
+  plugin_id: string | null
   voice: string
   locale: string
   speed: number

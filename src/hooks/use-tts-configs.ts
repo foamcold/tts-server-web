@@ -23,6 +23,8 @@ export interface TtsConfig {
   speed: number
   volume: number
   pitch: number
+  apply_rules: boolean
+  audio_format: string
   speech_rule_id: number | null
   speech_rule_tag: string
   speech_rule_tag_name: string
@@ -68,6 +70,8 @@ export interface TtsConfigCreate {
   speed?: number
   volume?: number
   pitch?: number
+  apply_rules?: boolean
+  audio_format?: string
   speech_rule_id?: number | null
   speech_rule_tag?: string
   speech_rule_tag_name?: string
@@ -90,6 +94,8 @@ export interface TtsConfigUpdate {
   speed?: number
   volume?: number
   pitch?: number
+  apply_rules?: boolean
+  audio_format?: string
   speech_rule_id?: number | null
   speech_rule_tag?: string
   speech_rule_tag_name?: string

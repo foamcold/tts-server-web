@@ -48,6 +48,8 @@ const configSchema = z.object({
   speed: z.number().min(0).max(100).default(50),
   volume: z.number().min(0).max(100).default(50),
   pitch: z.number().min(0).max(100).default(50),
+  apply_rules: z.boolean().default(true),
+  audio_format: z.enum(['mp3', 'wav', 'ogg']).default('mp3'),
   is_enabled: z.boolean().default(true),
 })
 
@@ -98,6 +100,8 @@ export function ConfigDialog({
       speed: 50,
       volume: 50,
       pitch: 50,
+      apply_rules: true,
+      audio_format: 'mp3',
       is_enabled: true,
     },
   })
@@ -116,7 +120,7 @@ export function ConfigDialog({
     if (config) {
       reset({
         name: config.name,
-        source_type: config.source_type as'plugin' | 'local' | 'http',
+        source_type: config.source_type as 'plugin' | 'local' | 'http',
         plugin_id: config.plugin_id || '',
         voice: config.voice,
         voice_name: config.voice_name,
@@ -124,6 +128,8 @@ export function ConfigDialog({
         speed: config.speed,
         volume: config.volume,
         pitch: config.pitch,
+        apply_rules: config.apply_rules ?? true,
+        audio_format: (config.audio_format || 'mp3') as 'mp3' | 'wav' | 'ogg',
         is_enabled: config.is_enabled,
       })
     } else {
@@ -137,6 +143,8 @@ export function ConfigDialog({
         speed: 50,
         volume: 50,
         pitch: 50,
+        apply_rules: true,
+        audio_format: 'mp3',
         is_enabled: true,
       })
     }
@@ -157,6 +165,8 @@ export function ConfigDialog({
       speed: data.speed,
       volume: data.volume,
       pitch: data.pitch,
+      apply_rules: data.apply_rules,
+      audio_format: data.audio_format,
       is_enabled: data.is_enabled,
     })
   }
@@ -350,6 +360,34 @@ export function ConfigDialog({
               step={1}
               onValueChange={([value]) => setValue('pitch', value)}
             />
+          </div>
+
+          {/* 应用替换规则开关 */}
+          <div className="flex items-center justify-between">
+            <Label htmlFor="apply_rules">应用替换规则</Label>
+            <Switch
+              id="apply_rules"
+              checked={watch('apply_rules')}
+              onCheckedChange={(checked) => setValue('apply_rules', checked)}
+            />
+          </div>
+
+          {/* 音频格式选择 */}
+          <div className="space-y-2">
+            <Label>音频格式</Label>
+            <Select
+              value={watch('audio_format')}
+              onValueChange={(value: 'mp3' | 'wav' | 'ogg') => setValue('audio_format', value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="选择音频格式" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mp3">MP3</SelectItem>
+                <SelectItem value="wav">WAV</SelectItem>
+                <SelectItem value="ogg">OGG</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* 启用开关 */}

@@ -53,6 +53,8 @@ class TtsConfigBase(BaseModel):
     speed: int = Field(default=50, ge=0, le=100, description="语速")
     volume: int = Field(default=50, ge=0, le=100, description="音量")
     pitch: int = Field(default=50, ge=0, le=100, description="音调")
+    apply_rules: bool = Field(default=True, description="是否应用替换规则")
+    audio_format: str = Field(default="mp3", description="音频格式: mp3, wav, ogg")
     speech_rule_id: Optional[int] = Field(None, description="朗读规则 ID")
     speech_rule_tag: str = Field(default="", description="朗读规则标签")
     speech_rule_tag_name: str = Field(default="", description="朗读规则标签名称")
@@ -78,6 +80,8 @@ class TtsConfigUpdate(BaseModel):
     speed: Optional[int] = Field(None, ge=0, le=100)
     volume: Optional[int] = Field(None, ge=0, le=100)
     pitch: Optional[int] = Field(None, ge=0, le=100)
+    apply_rules: Optional[bool] = None
+    audio_format: Optional[str] = None
     speech_rule_id: Optional[int] = None
     speech_rule_tag: Optional[str] = None
     speech_rule_tag_name: Optional[str] = None

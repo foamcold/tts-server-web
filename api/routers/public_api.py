@@ -114,7 +114,8 @@ async def public_tts(
 async def get_legado_config(
     api: str = Query(..., description="TTS API 地址"),
     name: str = Query(..., description="配置显示名称"),
-    plugin_id: int = Query(..., description="插件 ID"),
+    plugin_id: Optional[int] = Query(default=None, description="插件 ID（与 config_id 二选一）"),
+    config_id: Optional[int] = Query(default=None, description="TTS 配置 ID（与 plugin_id 二选一）"),
     voice: str = Query(default="", description="声音代码"),
     pitch: str = Query(default="50", description="音调"),
     format: str = Query(default="mp3", description="音频格式 (mp3/wav/ogg)"),
@@ -127,6 +128,10 @@ async def get_legado_config(
     - 返回标准的 Legado httpTTS 配置格式
     - URL 中包含阅读 APP 的模板变量
     
+    支持两种模式：
+    - plugin_id: 使用插件模式，需要传入 voice、pitch 等参数
+    - config_id: 使用配置模式，使用保存的配置参数
+    
     阅读 APP 模板变量说明：
     - {{speakText}}: 要朗读的文本
     - {{speakSpeed}}: 语速 (-50 到 50)
@@ -137,6 +142,10 @@ async def get_legado_config(
     - 转换后 rate 范围: -100 ~ 100
     - 实际使用时需要在插件中处理负值情况
     """
+    # 验证参数：plugin_id 和 config_id 至少要有一个
+    if plugin_id is None and config_id is None:
+        raise HTTPException(status_code=400, detail="必须提供 plugin_id 或 config_id 参数")
+    
     current_time = int(time.time() * 1000)
     
     # 根据音频格式确定 contentType
@@ -149,7 +158,12 @@ async def get_legado_config(
     
     # 构建 TTS URL，使用阅读 APP 的模板变量语法
     # 参考: LegadoUtils.kt 第27-28行
-    tts_url = f"{api}?plugin_id={plugin_id}&text={{{{java.encodeURI(speakText)}}}}&rate={{{{speakSpeed * 2}}}}&pitch={pitch}&voice={voice}&format={format}"
+    if config_id is not None:
+        # 配置模式：使用 config_id，参数从配置中读取
+        tts_url = f"{api}?config_id={config_id}&text={{{{java.encodeURI(speakText)}}}}&rate={{{{speakSpeed * 2}}}}"
+    else:
+        # 插件模式：使用 plugin_id，需要传入所有参数
+        tts_url = f"{api}?plugin_id={plugin_id}&text={{{{java.encodeURI(speakText)}}}}&rate={{{{speakSpeed * 2}}}}&pitch={pitch}&voice={voice}&format={format}"
     
     # 如果提供了 api_key，添加到 URL 中
     if api_key:
@@ -169,7 +183,7 @@ async def get_legado_config(
     
     # 调试日志：输出生成的 Legado JSON 配置
     logger.info(f"=== Legado JSON 响应 ===")
-    logger.info(f"请求参数: api={api}, name={name}, plugin_id={plugin_id}, voice={voice}, pitch={pitch}, format={format}, api_key={'***' if api_key else ''}")
+    logger.info(f"请求参数: api={api}, name={name}, plugin_id={plugin_id}, config_id={config_id}, voice={voice}, pitch={pitch}, format={format}, api_key={'***' if api_key else ''}")
     logger.info(f"生成的 TTS URL: {tts_url}")
     logger.info(f"完整 JSON: {legado_config}")
     

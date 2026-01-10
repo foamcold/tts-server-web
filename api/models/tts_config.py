@@ -40,6 +40,10 @@ class TtsConfig(Base):
     volume: Mapped[int] = mapped_column(Integer, default=50, comment="音量 0-100")
     pitch: Mapped[int] = mapped_column(Integer, default=50, comment="音调 0-100")
     
+    # 规则和格式
+    apply_rules: Mapped[bool] = mapped_column(Boolean, default=True, comment="是否应用替换规则")
+    audio_format: Mapped[str] = mapped_column(String(10), default="mp3", comment="音频格式")
+    
     # 朗读规则
     speech_rule_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, comment="朗读规则 ID")
     speech_rule_tag: Mapped[str] = mapped_column(String(50), default="", comment="朗读规则标签")

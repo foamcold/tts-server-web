@@ -48,43 +48,57 @@ class SynthesizerService:
         返回音频二进制数据
         优先从缓存获取，未命中则调用插件合成并缓存
         """
-        # 处理文本
+        # 处理文本（注意：apply_rules 可能被配置覆盖，所以先在后面处理）
         text = request.text
-        if request.apply_rules:
-            text = await self.text_processor.process_text(text)
-        
-        if not text.strip():
-            raise ValueError("处理后的文本为空")
         
         # 确定使用的配置
         tts_config = None
-        plugin_id = request.plugin_id
+        plugin_db_id = request.plugin_id  # 前端传入的是数据库整数 ID
         voice = request.voice
         locale = request.locale
         speed = request.speed
         volume = request.volume
         pitch = request.pitch
+        apply_rules = request.apply_rules
+        audio_format = request.format
         
         if request.config_id:
             tts_config = await self.get_config_by_id(request.config_id)
             if tts_config:
-                plugin_id = plugin_id or tts_config.plugin_id
+                # TtsConfig.plugin_id 是字符串标识符，需要转换为数据库 ID
+                if not plugin_db_id and tts_config.plugin_id:
+                    plugin_record = await self.plugin_service.get_plugin_by_plugin_id(tts_config.plugin_id)
+                    if plugin_record:
+                        plugin_db_id = plugin_record.id
+                    else:
+                        raise ValueError(f"配置关联的插件不存在: {tts_config.plugin_id}")
                 voice = voice or tts_config.voice
                 locale = locale or tts_config.locale
-                # 使用配置中的参数（如果请求中未修改默认值）
-                if request.speed == 50:  # 默认值
-                    speed = tts_config.speed
-                if request.volume == 50:
-                    volume = tts_config.volume
-                if request.pitch == 50:
-                    pitch = tts_config.pitch
+                # 使用配置中的参数（配置模式下完全使用配置的参数）
+                speed = tts_config.speed
+                volume = tts_config.volume
+                pitch = tts_config.pitch
+                # 使用配置中的应用规则和音频格式设置
+                apply_rules = getattr(tts_config, 'apply_rules', True)
+                audio_format_str = getattr(tts_config, 'audio_format', None)
+                if audio_format_str:
+                    try:
+                        audio_format = AudioFormat(audio_format_str)
+                    except ValueError:
+                        pass  # 保持请求中的默认格式
         
-        if not plugin_id:
+        if not plugin_db_id:
             # 使用默认配置
             tts_config = await self.get_default_config()
             if not tts_config:
                 raise ValueError("没有可用的 TTS 配置")
-            plugin_id = tts_config.plugin_id
+            # TtsConfig.plugin_id 是字符串标识符，需要转换为数据库 ID
+            if tts_config.plugin_id:
+                plugin_record = await self.plugin_service.get_plugin_by_plugin_id(tts_config.plugin_id)
+                if plugin_record:
+                    plugin_db_id = plugin_record.id
+                else:
+                    raise ValueError(f"配置关联的插件不存在: {tts_config.plugin_id}")
             voice = voice or tts_config.voice
             locale = locale or tts_config.locale
             speed = tts_config.speed
@@ -94,18 +108,26 @@ class SynthesizerService:
         if not voice:
             raise ValueError("未指定声音")
         
-        audio_format = request.format.value
+        # 现在处理文本（apply_rules 可能已被配置覆盖）
+        if apply_rules:
+            text = await self.text_processor.process_text(text)
+        
+        if not text.strip():
+            raise ValueError("处理后的文本为空")
+        
+        # 确定最终的音频格式
+        final_audio_format = audio_format.value if hasattr(audio_format, 'value') else str(audio_format)
         
         # 尝试从缓存获取
         cache_result = await self.cache_service.get_cache(
             text=text,
-            plugin_id=str(plugin_id),
+            plugin_id=str(plugin_db_id),
             voice=voice,
             locale=locale,
             speed=speed,
             volume=volume,
             pitch=pitch,
-            audio_format=audio_format
+            audio_format=final_audio_format
         )
         
         if cache_result:
@@ -115,12 +137,12 @@ class SynthesizerService:
         
         # 缓存未命中，调用插件合成
         logger.debug(f"[DEBUG] SynthesizerService.synthesize 准备调用插件")
-        logger.debug(f"[DEBUG] 参数: plugin_id={plugin_id}, text_len={len(text)}, voice={voice}, locale={locale}")
+        logger.debug(f"[DEBUG] 参数: plugin_db_id={plugin_db_id}, text_len={len(text)}, voice={voice}, locale={locale}")
         logger.debug(f"[DEBUG] 参数: speed={speed}, volume={volume}, pitch={pitch}")
         
         try:
             audio_data = await self.plugin_service.get_audio(
-                plugin_id,
+                plugin_db_id,
                 text,
                 locale,
                 voice,
@@ -136,19 +158,19 @@ class SynthesizerService:
             raise
         
         # 格式转换 (如果需要)
-        if request.format != AudioFormat.MP3:
-            audio_data = await self._convert_format(audio_data, request.format)
+        if audio_format != AudioFormat.MP3:
+            audio_data = await self._convert_format(audio_data, audio_format)
         
         # 保存到缓存
         await self.cache_service.save_cache(
             text=text,
-            plugin_id=str(plugin_id),
+            plugin_id=str(plugin_db_id),
             voice=voice,
             locale=locale,
             speed=speed,
             volume=volume,
             pitch=pitch,
-            audio_format=audio_format,
+            audio_format=final_audio_format,
             audio_data=audio_data
         )
         

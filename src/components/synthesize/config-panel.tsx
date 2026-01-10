@@ -83,22 +83,26 @@ export function ConfigPanel({ config, onChange }: ConfigPanelProps) {
   // 获取数据
   const { data: ttsConfigs, isLoading: configsLoading } = useTtsConfigs()
   const { data: plugins, isLoading: pluginsLoading } = usePlugins()
-  const { data: pluginVoices } = usePluginVoices(config.pluginId)
+  // 只在插件模式下获取声音列表，配置模式下不需要（配置已保存声音信息）
+  const { data: pluginVoices } = usePluginVoices(
+    config.mode === 'plugin' ? config.pluginId : undefined
+  )
 
   // 声音选择器的弹出状态
   const [voiceOpen, setVoiceOpen] = useState(false)
   // 声音搜索关键字
   const [voiceSearch, setVoiceSearch] = useState('')
 
-  // 当选择配置时，加载配置的参数
+  // 当选择配置时，加载配置的参数（仅用于显示，不需要设置 pluginId，因为配置模式不使用声音列表）
   useEffect(() => {
     if (config.mode === 'config' && config.configId && ttsConfigs) {
       const selectedConfig = ttsConfigs.find(
         (c: TtsConfig) => c.id === config.configId
       )
       if (selectedConfig) {
+        // 配置模式下不设置 pluginId，避免触发声音列表请求
+        // 声音信息已保存在配置中，不需要重新加载
         onChange({
-          pluginId: selectedConfig.plugin_id,
           locale: selectedConfig.locale,
           voice: selectedConfig.voice,
           speed: selectedConfig.speed,
@@ -355,93 +359,105 @@ export function ConfigPanel({ config, onChange }: ConfigPanelProps) {
           </div>
         )}
 
-        {/* 语速滑块 */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label>语速</Label>
-            <span className="text-sm text-muted-foreground">
-              {config.speed}%
-            </span>
-          </div>
-          <Slider
-            value={[config.speed]}
-            min={0}
-            max={100}
-            step={1}
-            onValueChange={([value]: number[]) => onChange({ speed: value })}
-          />
-        </div>
+        {/* 以下控件仅在插件模式下显示，配置模式下这些参数从配置中读取 */}
+        {config.mode === 'plugin' && (
+          <>
+            {/* 语速滑块 */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>语速</Label>
+                <span className="text-sm text-muted-foreground">
+                  {config.speed}%
+                </span>
+              </div>
+              <Slider
+                value={[config.speed]}
+                min={0}
+                max={100}
+                step={1}
+                onValueChange={([value]: number[]) => onChange({ speed: value })}
+              />
+            </div>
 
-        {/* 音量滑块 */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label>音量</Label>
-            <span className="text-sm text-muted-foreground">
-              {config.volume}%
-            </span>
-          </div>
-          <Slider
-            value={[config.volume]}
-            min={0}
-            max={100}
-            step={1}
-            onValueChange={([value]: number[]) => onChange({ volume: value })}
-          />
-        </div>
+            {/* 音量滑块 */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>音量</Label>
+                <span className="text-sm text-muted-foreground">
+                  {config.volume}%
+                </span>
+              </div>
+              <Slider
+                value={[config.volume]}
+                min={0}
+                max={100}
+                step={1}
+                onValueChange={([value]: number[]) => onChange({ volume: value })}
+              />
+            </div>
 
-        {/* 音调滑块 */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label>音调</Label>
-            <span className="text-sm text-muted-foreground">
-              {config.pitch}%
-            </span>
-          </div>
-          <Slider
-            value={[config.pitch]}
-            min={0}
-            max={100}
-            step={1}
-            onValueChange={([value]: number[]) => onChange({ pitch: value })}
-          />
-        </div>
+            {/* 音调滑块 */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>音调</Label>
+                <span className="text-sm text-muted-foreground">
+                  {config.pitch}%
+                </span>
+              </div>
+              <Slider
+                value={[config.pitch]}
+                min={0}
+                max={100}
+                step={1}
+                onValueChange={([value]: number[]) => onChange({ pitch: value })}
+              />
+            </div>
 
-        {/* 应用规则开关 */}
-        <div className="flex items-center justify-between">
-          <Label>应用替换规则</Label>
-          <Switch
-            checked={config.applyRules}
-            onCheckedChange={(checked: boolean) => onChange({ applyRules: checked })}
-          />
-        </div>
+            {/* 应用规则开关 */}
+            <div className="flex items-center justify-between">
+              <Label>应用替换规则</Label>
+              <Switch
+                checked={config.applyRules}
+                onCheckedChange={(checked: boolean) => onChange({ applyRules: checked })}
+              />
+            </div>
 
-        {/* 音频格式选择 */}
-        <div className="space-y-2">
-          <Label>音频格式</Label>
-          <Select
-            value={config.format}
-            onValueChange={(value: SynthesizeConfig['format']) =>
-              onChange({ format: value })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="选择音频格式" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="mp3">MP3</SelectItem>
-              <SelectItem value="wav">WAV</SelectItem>
-              <SelectItem value="ogg">OGG</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+            {/* 音频格式选择 */}
+            <div className="space-y-2">
+              <Label>音频格式</Label>
+              <Select
+                value={config.format}
+                onValueChange={(value: SynthesizeConfig['format']) =>
+                  onChange({ format: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="选择音频格式" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mp3">MP3</SelectItem>
+                  <SelectItem value="wav">WAV</SelectItem>
+                  <SelectItem value="ogg">OGG</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
 
         {/* 一键导入阅读 Legado */}
         <LegadoImportButton
+          mode={config.mode}
           pluginId={config.pluginId}
+          configId={config.configId}
           voice={config.voice}
           pitch={config.pitch}
-          voiceName={selectedVoiceName || ''}
+          voiceName={selectedVoiceName || config.voice}
           format={config.format}
+          // 配置模式下从选中的配置获取名称
+          configName={config.mode === 'config' && config.configId && ttsConfigs
+            ? ttsConfigs.find((c: TtsConfig) => c.id === config.configId)?.name
+            : undefined
+          }
         />
       </CardContent>
     </Card>
@@ -461,14 +477,34 @@ export function ConfigPanel({ config, onChange }: ConfigPanelProps) {
  * 3. 阅读 APP 会请求该 URL 获取 JSON 配置并导入
  */
 interface LegadoImportButtonProps {
+  /** 合成模式 */
+  mode: 'config' | 'plugin'
+  /** 插件 ID（插件模式下使用） */
   pluginId?: number
+  /** TTS 配置 ID（配置模式下使用） */
+  configId?: number
+  /** 声音代码 */
   voice: string
+  /** 音调 */
   pitch: number
+  /** 声音显示名称 */
   voiceName: string
+  /** 音频格式 */
   format: 'mp3' | 'wav' | 'ogg'
+  /** TTS 配置名称（配置模式下使用） */
+  configName?: string
 }
 
-function LegadoImportButton({ pluginId, voice, pitch, voiceName, format }: LegadoImportButtonProps) {
+function LegadoImportButton({
+  mode,
+  pluginId,
+  configId,
+  voice,
+  pitch,
+  voiceName,
+  format,
+  configName
+}: LegadoImportButtonProps) {
   // 获取 API 鉴权状态
   const { data: authStatus } = useApiAuthStatus()
   
@@ -489,53 +525,95 @@ function LegadoImportButton({ pluginId, voice, pitch, voiceName, format }: Legad
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
     // TTS API 地址（用于 Legado 配置中的实际请求）
     const ttsApiUrl = `${baseUrl}/api/tts`
-    // 配置显示名称
-    const name = voiceName ? `TTS-${voiceName}` : 'TTS-Server'
     
-    // 构建 /api/legado URL
-    // 参考 index.html 第225-227行的实现
-    const urlParts = [
-      `${baseUrl}/api/legado`,
-      `?api=${encodeURIComponent(ttsApiUrl)}`,
-      `&name=${encodeURIComponent(name)}`,
-      `&plugin_id=${pluginId || 0}`,
-      `&pitch=${pitch}`,
-      `&voice=${encodeURIComponent(voice)}`,
-      `&format=${format}`,
-    ]
-    
-    // 如果 API 鉴权已开启且有 API Key，添加到 URL 中
-    if (authStatus?.auth_enabled && authStatus?.api_key) {
-      urlParts.push(`&api_key=${encodeURIComponent(authStatus.api_key)}`)
+    // 根据模式构建不同的导入配置
+    if (mode === 'config' && configId) {
+      // 配置模式：使用 config_id
+      const name = configName ? `TTS-${configName}` : 'TTS-Server-Config'
+      
+      const urlParts = [
+        `${baseUrl}/api/legado`,
+        `?api=${encodeURIComponent(ttsApiUrl)}`,
+        `&name=${encodeURIComponent(name)}`,
+        `&config_id=${configId}`,
+        `&format=${format}`,
+      ]
+      
+      // 如果 API 鉴权已开启且有 API Key，添加到 URL 中
+      if (authStatus?.auth_enabled && authStatus?.api_key) {
+        urlParts.push(`&api_key=${encodeURIComponent(authStatus.api_key)}`)
+      }
+      
+      const legadoApiUrl = urlParts.join('')
+      
+      // === 调试日志 ===
+      console.log('=== Legado 导入调试（配置模式） ===')
+      console.log('configId:', configId)
+      console.log('configName:', configName)
+      console.log('legadoApiUrl:', legadoApiUrl)
+      
+      // 预览 JSON 内容
+      try {
+        const response = await fetch(legadoApiUrl)
+        const json = await response.json()
+        console.log('=== Legado JSON 响应 ===')
+        console.log(JSON.stringify(json, null, 2))
+      } catch (e) {
+        console.error('获取 Legado JSON 失败:', e)
+      }
+      
+      // 使用 legado:// 协议导入
+      const importUrl = `legado://import/httpTTS?src=${encodeURIComponent(legadoApiUrl)}`
+      console.log('legado:// 导入 URL:', importUrl)
+      
+      window.location.href = importUrl
+    } else if (mode === 'plugin' && pluginId) {
+      // 插件模式：使用 plugin_id
+      const name = voiceName ? `TTS-${voiceName}` : 'TTS-Server'
+      
+      const urlParts = [
+        `${baseUrl}/api/legado`,
+        `?api=${encodeURIComponent(ttsApiUrl)}`,
+        `&name=${encodeURIComponent(name)}`,
+        `&plugin_id=${pluginId}`,
+        `&pitch=${pitch}`,
+        `&voice=${encodeURIComponent(voice)}`,
+        `&format=${format}`,
+      ]
+      
+      // 如果 API 鉴权已开启且有 API Key，添加到 URL 中
+      if (authStatus?.auth_enabled && authStatus?.api_key) {
+        urlParts.push(`&api_key=${encodeURIComponent(authStatus.api_key)}`)
+      }
+      
+      const legadoApiUrl = urlParts.join('')
+      
+      // === 调试日志 ===
+      console.log('=== Legado 导入调试（插件模式） ===')
+      console.log('pluginId:', pluginId)
+      console.log('voice:', voice)
+      console.log('legadoApiUrl:', legadoApiUrl)
+      
+      // 预览 JSON 内容
+      try {
+        const response = await fetch(legadoApiUrl)
+        const json = await response.json()
+        console.log('=== Legado JSON 响应 ===')
+        console.log(JSON.stringify(json, null, 2))
+      } catch (e) {
+        console.error('获取 Legado JSON 失败:', e)
+      }
+      
+      // 使用 legado:// 协议导入
+      const importUrl = `legado://import/httpTTS?src=${encodeURIComponent(legadoApiUrl)}`
+      console.log('legado:// 导入 URL:', importUrl)
+      
+      window.location.href = importUrl
+    } else {
+      console.warn('无法导入：缺少必要参数')
+      console.warn('mode:', mode, 'pluginId:', pluginId, 'configId:', configId)
     }
-    
-    const legadoApiUrl = urlParts.join('')
-    
-    // === 调试日志 ===
-    console.log('=== Legado 导入调试 ===')
-    console.log('baseUrl:', baseUrl)
-    console.log('ttsApiUrl:', ttsApiUrl)
-    console.log('name:', name)
-    console.log('API 鉴权状态:', authStatus?.auth_enabled ? '已开启' : '已关闭')
-    console.log('legadoApiUrl:', legadoApiUrl)
-    
-    // 预览 JSON 内容（先用 fetch 获取并打印）
-    try {
-      const response = await fetch(legadoApiUrl)
-      const json = await response.json()
-      console.log('=== Legado JSON 响应 ===')
-      console.log(JSON.stringify(json, null, 2))
-    } catch (e) {
-      console.error('获取 Legado JSON 失败:', e)
-    }
-    
-    // 使用 legado:// 协议导入
-    // 参考 index.html 第216行：legado://import/httpTTS?src= + encodeURIComponent(url)
-    const importUrl = `legado://import/httpTTS?src=${encodeURIComponent(legadoApiUrl)}`
-    console.log('legado:// 导入 URL:', importUrl)
-    
-    window.location.href = importUrl
-  }, [pluginId, voice, pitch, voiceName, format, authStatus])
+  }, [mode, pluginId, configId, voice, pitch, voiceName, format, configName, authStatus])
 
   return (
     <Button

@@ -56,8 +56,8 @@ htmlcov/
 .kilocode/
 docs/
 plans/
-plugins/*.js
-!plugins/.gitkeep
+data/
+!data/.gitkeep
 
 # TypeScript
 *.tsbuildinfo
