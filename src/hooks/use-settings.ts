@@ -54,8 +54,51 @@ export interface HealthStatus {
 }
 
 /**
+ * 缓存设置接口
+ */
+export interface CacheSettings {
+  cache_audio_enabled: boolean
+  cache_audio_max_age_days: number
+  cache_audio_max_count: number
+}
+
+/**
+ * 缓存统计接口
+ */
+export interface CacheStats {
+  enabled: boolean
+  total_count: number
+  total_size_bytes: number
+  total_size_mb: number
+  total_hits: number
+  oldest_cache_date: string | null
+  newest_cache_date: string | null
+  max_age_days: number
+  max_count: number
+}
+
+/**
+ * 缓存清理响应
+ */
+export interface CacheCleanupResponse {
+  deleted_count: number
+  deleted_size_bytes: number
+  remaining_count: number
+  message: string
+}
+
+/**
+ * 缓存清空响应
+ */
+export interface CacheClearResponse {
+  deleted_count: number
+  deleted_size_bytes: number
+  message: string
+}
+
+/**
  * 获取个人资料
- *使用现有的 /auth/me 接口
+ * 使用现有的 /auth/me 接口
  */
 export function useProfile() {
   return useQuery({
@@ -128,6 +171,87 @@ export function useHealthStatus() {
 }
 
 /**
+ * 获取缓存设置
+ */
+export function useCacheSettings() {
+  return useQuery({
+    queryKey: ['cacheSettings'],
+    queryFn: () => request<CacheSettings>({ url: '/settings/cache' }),
+    staleTime: 60 * 1000, // 1分钟缓存
+  })
+}
+
+/**
+ * 更新缓存设置
+ */
+export function useUpdateCacheSettings() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: CacheSettings) =>
+      request<CacheSettings>({ method: 'PUT', url: '/settings/cache', data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cacheSettings'] })
+      queryClient.invalidateQueries({ queryKey: ['cacheStats'] })
+      toast.success('缓存设置已更新')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || '更新失败')
+    },
+  })
+}
+
+/**
+ * 获取缓存统计
+ */
+export function useCacheStats() {
+  return useQuery({
+    queryKey: ['cacheStats'],
+    queryFn: () => request<CacheStats>({ url: '/cache/stats' }),
+    staleTime: 30 * 1000, // 30秒缓存
+    refetchInterval: 60 * 1000, // 每分钟自动刷新
+  })
+}
+
+/**
+ * 清理缓存
+ */
+export function useCleanupCache() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () =>
+      request<CacheCleanupResponse>({ method: 'POST', url: '/cache/cleanup' }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['cacheStats'] })
+      toast.success(data.message)
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || '清理失败')
+    },
+  })
+}
+
+/**
+ * 清空所有缓存
+ */
+export function useClearCache() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () =>
+      request<CacheClearResponse>({ method: 'DELETE', url: '/cache' }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['cacheStats'] })
+      toast.success(data.message)
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || '清空失败')
+    },
+  })
+}
+
+/**
  * 格式化运行时间
  * @param seconds 秒数
  * @returns 格式化的时间字符串
@@ -145,4 +269,17 @@ export function formatUptime(seconds: number): string {
   if (secs > 0 || parts.length === 0) parts.push(`${secs}秒`)
 
   return parts.join(' ')
+}
+
+/**
+ * 格式化文件大小
+ * @param bytes 字节数
+ * @returns 格式化的大小字符串
+ */
+export function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }

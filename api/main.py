@@ -79,13 +79,15 @@ async def health_check():
 
 
 # 注册路由
-from .routers import auth, tts, plugins, synthesizer, rules, public_api
+from .routers import auth, tts, plugins, synthesizer, rules, public_api, settings, cache
 
 app.include_router(auth.router, prefix="/api")
 app.include_router(tts.router, prefix="/api")  # TTS 配置管理: /api/tts-configs/...
 app.include_router(plugins.router, prefix="/api")
 app.include_router(synthesizer.router, prefix="/api")
 app.include_router(rules.router, prefix="/api")
+app.include_router(settings.router, prefix="/api")  # 系统设置: /api/settings/...
+app.include_router(cache.router, prefix="/api")  # 缓存管理: /api/cache/...
 app.include_router(public_api.router, prefix="/api")  # 公开 API: /api/tts, /api/legado, /api/info, /api/health, /api/proxy
 
 

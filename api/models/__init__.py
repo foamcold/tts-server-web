@@ -7,6 +7,8 @@ from .tts_group import TtsGroup
 from .tts_config import TtsConfig
 from .replace_rule import ReplaceRuleGroup, ReplaceRule
 from .speech_rule import SpeechRule
+from .audio_cache import AudioCache
+from .system_settings import SystemSettings, SettingsKeys, DEFAULT_SETTINGS
 
 __all__ = [
     "User",
@@ -16,4 +18,8 @@ __all__ = [
     "ReplaceRuleGroup",
     "ReplaceRule",
     "SpeechRule",
+    "AudioCache",
+    "SystemSettings",
+    "SettingsKeys",
+    "DEFAULT_SETTINGS",
 ]

@@ -51,7 +51,8 @@ async def init_db():
     # 导入所有模型以确保表被注册到metadata
     from .models import (
         User, Plugin, TtsGroup, TtsConfig,
-        ReplaceRuleGroup, ReplaceRule, SpeechRule
+        ReplaceRuleGroup, ReplaceRule, SpeechRule,
+        AudioCache, SystemSettings
     )
     
     async with engine.begin() as conn:

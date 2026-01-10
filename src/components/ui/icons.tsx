@@ -36,7 +36,8 @@ import {
   FileText,
   Folder,
   FolderOpen,
-  RefreshCw,MoreHorizontal,
+  RefreshCw,
+  MoreHorizontal,
   MoreVertical,
   GripVertical,
   AlertCircle,
@@ -61,6 +62,10 @@ import {
   ArrowDown,
   Import,
   Share2,
+  Database,
+  HardDrive,
+  Clock,
+  BarChart3,
 } from 'lucide-react'
 
 export type Icon = LucideIcon
@@ -139,4 +144,10 @@ export const Icons = {
   terminal: Terminal,
   eye: Eye,
   eyeOff: EyeOff,
+
+  // 缓存相关
+  database: Database,
+  hardDrive: HardDrive,
+  clock: Clock,
+  barChart: BarChart3,
 }

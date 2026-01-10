@@ -13,6 +13,7 @@ from ..models.tts_config import TtsConfig
 from ..schemas.synthesizer import SynthesizeRequest, AudioFormat
 from ..services.text_processor import TextProcessor
 from ..services.plugin_service import PluginService
+from ..services.audio_cache_service import AudioCacheService
 from ..config import config
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,7 @@ class SynthesizerService:
         self.db = db
         self.text_processor = TextProcessor(db)
         self.plugin_service = PluginService(db)
+        self.cache_service = AudioCacheService(db)
 
     async def get_default_config(self) -> Optional[TtsConfig]:
         """获取默认 TTS 配置"""
@@ -44,6 +46,7 @@ class SynthesizerService:
         """
         合成语音
         返回音频二进制数据
+        优先从缓存获取，未命中则调用插件合成并缓存
         """
         # 处理文本
         text = request.text
@@ -91,7 +94,26 @@ class SynthesizerService:
         if not voice:
             raise ValueError("未指定声音")
         
-        # 调用插件合成
+        audio_format = request.format.value
+        
+        # 尝试从缓存获取
+        cache_result = await self.cache_service.get_cache(
+            text=text,
+            plugin_id=str(plugin_id),
+            voice=voice,
+            locale=locale,
+            speed=speed,
+            volume=volume,
+            pitch=pitch,
+            audio_format=audio_format
+        )
+        
+        if cache_result:
+            audio_data, cache_record = cache_result
+            logger.info(f"缓存命中: voice={voice}, text_len={len(text)}, hit_count={cache_record.hit_count}")
+            return audio_data
+        
+        # 缓存未命中，调用插件合成
         logger.debug(f"[DEBUG] SynthesizerService.synthesize 准备调用插件")
         logger.debug(f"[DEBUG] 参数: plugin_id={plugin_id}, text_len={len(text)}, voice={voice}, locale={locale}")
         logger.debug(f"[DEBUG] 参数: speed={speed}, volume={volume}, pitch={pitch}")
@@ -116,6 +138,19 @@ class SynthesizerService:
         # 格式转换 (如果需要)
         if request.format != AudioFormat.MP3:
             audio_data = await self._convert_format(audio_data, request.format)
+        
+        # 保存到缓存
+        await self.cache_service.save_cache(
+            text=text,
+            plugin_id=str(plugin_id),
+            voice=voice,
+            locale=locale,
+            speed=speed,
+            volume=volume,
+            pitch=pitch,
+            audio_format=audio_format,
+            audio_data=audio_data
+        )
         
         return audio_data
 

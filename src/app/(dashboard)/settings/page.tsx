@@ -5,12 +5,12 @@ import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/ui/page-header'
 import { Button } from '@/components/ui/button'
 import { Icons } from '@/components/ui/icons'
-import { ProfileForm, PasswordForm } from '@/components/settings'
+import { ProfileForm, PasswordForm, CacheSettingsForm } from '@/components/settings'
 
 /**
  * 设置页面标签类型
  */
-type SettingsTab = 'profile' | 'security'
+type SettingsTab = 'profile' | 'security' | 'cache'
 
 /**
  * 标签配置
@@ -28,6 +28,12 @@ const tabs: { id: SettingsTab; label: string; icon: keyof typeof Icons; descript
     icon: 'shield',
     description: '修改密码和安全选项',
   },
+  {
+    id: 'cache',
+    label: '缓存设置',
+    icon: 'database',
+    description: '管理音频缓存配置',
+  },
 ]
 
 /**
@@ -42,7 +48,7 @@ export default function SettingsPage() {
       {/* 页面标题 */}
       <PageHeader
         title="设置"
-        description="管理个人资料和安全设置"
+        description="管理个人资料、安全设置和缓存配置"
       />
 
       <div className="flex flex-col lg:flex-row gap-6">
@@ -77,6 +83,7 @@ export default function SettingsPage() {
         <div className="flex-1 max-w-2xl">
           {activeTab === 'profile' && <ProfileForm />}
           {activeTab === 'security' && <PasswordForm />}
+          {activeTab === 'cache' && <CacheSettingsForm />}
         </div>
       </div>
     </div>
