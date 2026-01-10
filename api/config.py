@@ -47,11 +47,6 @@ logging:
   level: "INFO"
   # 日志格式
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-
-# TTS 配置
-tts:
-  # 公开 API 密钥（为空则不需要密钥）
-  api_key: ""
 '''
 
 
@@ -80,18 +75,12 @@ class LoggingConfig(BaseModel):
     format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 
-class TtsConfig(BaseModel):
-    """TTS 配置"""
-    api_key: str = ""  # 公开 API 的密钥，为空则不需要密钥
-
-
 class AppConfig(BaseModel):
     """应用总配置"""
     server: ServerConfig = ServerConfig()
     database: DatabaseConfig = DatabaseConfig()
     auth: AuthConfig = AuthConfig()
     logging: LoggingConfig = LoggingConfig()
-    tts: TtsConfig = TtsConfig()
 
 
 def _ensure_config_file() -> bool:

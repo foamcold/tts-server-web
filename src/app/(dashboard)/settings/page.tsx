@@ -5,12 +5,12 @@ import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/ui/page-header'
 import { Button } from '@/components/ui/button'
 import { Icons } from '@/components/ui/icons'
-import { ProfileForm, PasswordForm, CacheSettingsForm } from '@/components/settings'
+import { ProfileForm, PasswordForm, CacheSettingsForm, ApiKeyForm } from '@/components/settings'
 
 /**
  * 设置页面标签类型
  */
-type SettingsTab = 'profile' | 'security' | 'cache'
+type SettingsTab = 'profile' | 'security' | 'apikey' | 'cache'
 
 /**
  * 标签配置
@@ -27,6 +27,12 @@ const tabs: { id: SettingsTab; label: string; icon: keyof typeof Icons; descript
     label: '安全设置',
     icon: 'shield',
     description: '修改密码和安全选项',
+  },
+  {
+    id: 'apikey',
+    label: '密钥管理',
+    icon: 'key',
+    description: '管理 API 访问密钥',
   },
   {
     id: 'cache',
@@ -83,6 +89,7 @@ export default function SettingsPage() {
         <div className="flex-1 max-w-2xl">
           {activeTab === 'profile' && <ProfileForm />}
           {activeTab === 'security' && <PasswordForm />}
+          {activeTab === 'apikey' && <ApiKeyForm />}
           {activeTab === 'cache' && <CacheSettingsForm />}
         </div>
       </div>

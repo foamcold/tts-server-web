@@ -40,6 +40,7 @@ import {
   TtsConfig,
   Plugin,
 } from '@/hooks/use-synthesize'
+import { useApiAuthStatus } from '@/hooks/use-settings'
 
 /**
  * 合成配置状态
@@ -468,6 +469,9 @@ interface LegadoImportButtonProps {
 }
 
 function LegadoImportButton({ pluginId, voice, pitch, voiceName, format }: LegadoImportButtonProps) {
+  // 获取 API 鉴权状态
+  const { data: authStatus } = useApiAuthStatus()
+  
   /**
    * 构建 Legado 导入 URL 并触发导入
    *
@@ -490,7 +494,7 @@ function LegadoImportButton({ pluginId, voice, pitch, voiceName, format }: Legad
     
     // 构建 /api/legado URL
     // 参考 index.html 第225-227行的实现
-    const legadoApiUrl = [
+    const urlParts = [
       `${baseUrl}/api/legado`,
       `?api=${encodeURIComponent(ttsApiUrl)}`,
       `&name=${encodeURIComponent(name)}`,
@@ -498,13 +502,21 @@ function LegadoImportButton({ pluginId, voice, pitch, voiceName, format }: Legad
       `&pitch=${pitch}`,
       `&voice=${encodeURIComponent(voice)}`,
       `&format=${format}`,
-    ].join('')
+    ]
+    
+    // 如果 API 鉴权已开启且有 API Key，添加到 URL 中
+    if (authStatus?.auth_enabled && authStatus?.api_key) {
+      urlParts.push(`&api_key=${encodeURIComponent(authStatus.api_key)}`)
+    }
+    
+    const legadoApiUrl = urlParts.join('')
     
     // === 调试日志 ===
     console.log('=== Legado 导入调试 ===')
     console.log('baseUrl:', baseUrl)
     console.log('ttsApiUrl:', ttsApiUrl)
     console.log('name:', name)
+    console.log('API 鉴权状态:', authStatus?.auth_enabled ? '已开启' : '已关闭')
     console.log('legadoApiUrl:', legadoApiUrl)
     
     // 预览 JSON 内容（先用 fetch 获取并打印）
@@ -523,7 +535,7 @@ function LegadoImportButton({ pluginId, voice, pitch, voiceName, format }: Legad
     console.log('legado:// 导入 URL:', importUrl)
     
     window.location.href = importUrl
-  }, [pluginId, voice, pitch, voiceName, format])
+  }, [pluginId, voice, pitch, voiceName, format, authStatus])
 
   return (
     <Button

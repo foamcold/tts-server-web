@@ -12,6 +12,7 @@ from ..schemas.auth import (
     UserResponse,
     MessageResponse,
     ChangePasswordRequest,
+    ApiKeyResponse,
 )
 from ..services.auth_service import AuthService
 from ..utils.auth import create_access_token, verify_password
@@ -106,3 +107,33 @@ async def change_password(
     await auth_service.update_password(current_user, data.new_password)
     
     return MessageResponse(message="密码修改成功")
+
+
+@router.get("/api-key", response_model=ApiKeyResponse)
+async def get_api_key(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    获取当前用户的 API Key
+    
+    如果用户还没有 API Key，会自动生成一个
+    """
+    auth_service = AuthService(db)
+    api_key = await auth_service.ensure_user_has_api_key(current_user)
+    return ApiKeyResponse(api_key=api_key)
+
+
+@router.post("/api-key/regenerate", response_model=ApiKeyResponse)
+async def regenerate_api_key(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    重新生成当前用户的 API Key
+    
+    注意：重新生成后，旧的 API Key 将失效
+    """
+    auth_service = AuthService(db)
+    new_api_key = await auth_service.regenerate_api_key(current_user)
+    return ApiKeyResponse(api_key=new_api_key)

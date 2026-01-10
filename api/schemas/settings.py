@@ -39,3 +39,13 @@ class SettingsResponse(BaseModel):
 class MessageResponse(BaseModel):
     """消息响应"""
     message: str
+
+
+class ApiAuthSettingsResponse(BaseModel):
+    """API 鉴权设置响应"""
+    api_auth_enabled: bool = Field(description="是否启用 API 鉴权")
+
+
+class ApiAuthSettingsUpdate(BaseModel):
+    """API 鉴权设置更新"""
+    api_auth_enabled: bool = Field(description="是否启用 API 鉴权")

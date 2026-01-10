@@ -14,8 +14,13 @@ import aiohttp
 
 from ..database import get_db
 from ..schemas.synthesizer import SynthesizeRequest, AudioFormat
+from ..schemas.auth import ApiAuthStatusResponse
 from ..services.synthesizer_service import SynthesizerService
+from ..services.settings_service import SettingsService
+from ..services.auth_service import AuthService
 from ..config import config
+from ..utils.deps import get_current_user_optional
+from ..models.user import User
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -38,7 +43,7 @@ async def public_tts(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    公开 TTS API (需要 API Key)
+    公开 TTS API (可能需要 API Key，取决于系统设置)
     兼容常见 TTS API 格式，也兼容阅读 Legado 等客户端
     
     参数说明:
@@ -50,12 +55,21 @@ async def public_tts(
     - plugin_id: 指定使用的插件 ID
     - config_id: 指定使用的 TTS 配置 ID
     - format: 音频格式 (mp3/wav/ogg/flac)
-    - api_key: API 密钥
+    - api_key: API 密钥（当系统开启 API 鉴权时必需）
     """
-    # 验证 API Key
-    configured_api_key = config.tts.api_key
-    if configured_api_key and api_key != configured_api_key:
-        raise HTTPException(status_code=401, detail="无效的 API Key")
+    # 检查是否需要 API Key 验证
+    settings_service = SettingsService(db)
+    auth_enabled = await settings_service.get_api_auth_enabled()
+    
+    if auth_enabled:
+        # API 鉴权已开启，需要验证 API Key
+        if not api_key:
+            raise HTTPException(status_code=401, detail="需要提供 API Key")
+        
+        auth_service = AuthService(db)
+        user = await auth_service.get_user_by_api_key(api_key)
+        if not user:
+            raise HTTPException(status_code=401, detail="无效的 API Key")
     
     service = SynthesizerService(db)
     try:
@@ -104,6 +118,7 @@ async def get_legado_config(
     voice: str = Query(default="", description="声音代码"),
     pitch: str = Query(default="50", description="音调"),
     format: str = Query(default="mp3", description="音频格式 (mp3/wav/ogg)"),
+    api_key: str = Query(default="", description="API 密钥（当系统开启 API 鉴权时需要）"),
 ):
     """
     生成阅读 Legado APP 的 httpTTS 配置 JSON
@@ -136,6 +151,10 @@ async def get_legado_config(
     # 参考: LegadoUtils.kt 第27-28行
     tts_url = f"{api}?plugin_id={plugin_id}&text={{{{java.encodeURI(speakText)}}}}&rate={{{{speakSpeed * 2}}}}&pitch={pitch}&voice={voice}&format={format}"
     
+    # 如果提供了 api_key，添加到 URL 中
+    if api_key:
+        tts_url += f"&api_key={api_key}"
+    
     # 返回标准的 Legado httpTTS 配置 JSON
     # 参考: LegadoUtils.kt LegadoJson 数据类
     legado_config = {
@@ -150,7 +169,7 @@ async def get_legado_config(
     
     # 调试日志：输出生成的 Legado JSON 配置
     logger.info(f"=== Legado JSON 响应 ===")
-    logger.info(f"请求参数: api={api}, name={name}, plugin_id={plugin_id}, voice={voice}, pitch={pitch}, format={format}")
+    logger.info(f"请求参数: api={api}, name={name}, plugin_id={plugin_id}, voice={voice}, pitch={pitch}, format={format}, api_key={'***' if api_key else ''}")
     logger.info(f"生成的 TTS URL: {tts_url}")
     logger.info(f"完整 JSON: {legado_config}")
     
@@ -226,3 +245,30 @@ async def get_server_info():
 async def health_check():
     """健康检查"""
     return {"status": "ok"}
+
+
+@router.get("/auth-status", response_model=ApiAuthStatusResponse)
+async def get_auth_status(
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """
+    获取 API 鉴权状态
+    
+    返回：
+    - auth_enabled: 是否开启 API 鉴权
+    - api_key: 当前用户的 API Key（仅当用户已登录时返回）
+    """
+    settings_service = SettingsService(db)
+    auth_enabled = await settings_service.get_api_auth_enabled()
+    
+    api_key = None
+    if current_user:
+        # 确保用户有 API Key
+        auth_service = AuthService(db)
+        api_key = await auth_service.ensure_user_has_api_key(current_user)
+    
+    return ApiAuthStatusResponse(
+        auth_enabled=auth_enabled,
+        api_key=api_key,
+    )

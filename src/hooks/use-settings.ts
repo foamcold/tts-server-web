@@ -251,6 +251,105 @@ export function useClearCache() {
   })
 }
 
+// ============ API 鉴权相关 ============
+
+/**
+ * API 鉴权状态接口
+ */
+export interface ApiAuthStatus {
+  auth_enabled: boolean
+  api_key: string | null
+}
+
+/**
+ * API 鉴权设置接口
+ */
+export interface ApiAuthSettings {
+  api_auth_enabled: boolean
+}
+
+/**
+ * API Key 响应接口
+ */
+export interface ApiKeyResponse {
+  api_key: string
+}
+
+/**
+ * 获取 API 鉴权状态
+ */
+export function useApiAuthStatus() {
+  return useQuery({
+    queryKey: ['apiAuthStatus'],
+    queryFn: () => request<ApiAuthStatus>({ url: '/auth-status' }),
+    staleTime: 30 * 1000, // 30秒缓存
+  })
+}
+
+/**
+ * 获取 API 鉴权设置（管理员）
+ */
+export function useApiAuthSettings() {
+  return useQuery({
+    queryKey: ['apiAuthSettings'],
+    queryFn: () => request<ApiAuthSettings>({ url: '/settings/api-auth' }),
+    staleTime: 30 * 1000, // 30秒缓存
+  })
+}
+
+/**
+ * 更新 API 鉴权设置（管理员）
+ */
+export function useUpdateApiAuthSettings() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: ApiAuthSettings) =>
+      request<ApiAuthSettings>({ method: 'PUT', url: '/settings/api-auth', data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['apiAuthSettings'] })
+      queryClient.invalidateQueries({ queryKey: ['apiAuthStatus'] })
+      toast.success('API 鉴权设置已更新')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || '更新失败')
+    },
+  })
+}
+
+/**
+ * 获取当前用户的 API Key
+ */
+export function useApiKey() {
+  return useQuery({
+    queryKey: ['apiKey'],
+    queryFn: () => request<ApiKeyResponse>({ url: '/auth/api-key' }),
+    staleTime: 60 * 1000, // 1分钟缓存
+  })
+}
+
+/**
+ * 重新生成 API Key
+ */
+export function useRegenerateApiKey() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () =>
+      request<ApiKeyResponse>({ method: 'POST', url: '/auth/api-key/regenerate' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['apiKey'] })
+      queryClient.invalidateQueries({ queryKey: ['apiAuthStatus'] })
+      toast.success('API Key 已重新生成')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || '重新生成失败')
+    },
+  })
+}
+
+// ============ 工具函数 ============
+
 /**
  * 格式化运行时间
  * @param seconds 秒数

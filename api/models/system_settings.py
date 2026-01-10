@@ -53,6 +53,8 @@ class SettingsKeys:
     CACHE_AUDIO_ENABLED = "cache.audio.enabled"
     CACHE_AUDIO_MAX_AGE_DAYS = "cache.audio.max_age_days"
     CACHE_AUDIO_MAX_COUNT = "cache.audio.max_count"
+    # API 鉴权设置
+    API_AUTH_ENABLED = "api.auth.enabled"
 
 
 # 默认设置值
@@ -68,5 +70,9 @@ DEFAULT_SETTINGS = {
     SettingsKeys.CACHE_AUDIO_MAX_COUNT: {
         "value": 1000,
         "description": "最大缓存数量"
+    },
+    SettingsKeys.API_AUTH_ENABLED: {
+        "value": False,
+        "description": "是否启用 API 鉴权（需要 API Key 才能调用公开 API）"
     },
 }

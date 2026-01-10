@@ -137,3 +137,27 @@ class SettingsService:
             if existing is None:
                 await self.set_setting(key, config["value"], config["description"])
                 logger.info(f"初始化默认设置: {key} = {config['value']}")
+
+    async def get_api_auth_enabled(self) -> bool:
+        """
+        获取 API 鉴权开关状态
+        
+        Returns:
+            是否启用 API 鉴权
+        """
+        value = await self.get_setting(SettingsKeys.API_AUTH_ENABLED)
+        return bool(value) if value is not None else False
+
+    async def set_api_auth_enabled(self, enabled: bool) -> None:
+        """
+        设置 API 鉴权开关状态
+        
+        Args:
+            enabled: 是否启用
+        """
+        await self.set_setting(
+            SettingsKeys.API_AUTH_ENABLED,
+            enabled,
+            "是否启用 API 鉴权（需要 API Key 才能调用公开 API）"
+        )
+        logger.info(f"API 鉴权设置已更新: enabled={enabled}")

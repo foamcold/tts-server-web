@@ -5,7 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..schemas.settings import CacheSettingsResponse, CacheSettingsUpdate, MessageResponse
+from ..schemas.settings import (
+    CacheSettingsResponse,
+    CacheSettingsUpdate,
+    MessageResponse,
+    ApiAuthSettingsResponse,
+    ApiAuthSettingsUpdate,
+)
 from ..services.settings_service import SettingsService
 from ..utils.deps import get_current_user
 from ..models.user import User
@@ -42,3 +48,38 @@ async def update_cache_settings(
         max_count=data.cache_audio_max_count,
     )
     return CacheSettingsResponse(**settings)
+
+
+@router.get("/api-auth", response_model=ApiAuthSettingsResponse)
+async def get_api_auth_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    获取 API 鉴权设置
+    
+    返回是否启用 API 鉴权（需要 API Key 才能调用公开 API）
+    """
+    service = SettingsService(db)
+    enabled = await service.get_api_auth_enabled()
+    return ApiAuthSettingsResponse(api_auth_enabled=enabled)
+
+
+@router.put("/api-auth", response_model=ApiAuthSettingsResponse)
+async def update_api_auth_settings(
+    data: ApiAuthSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    更新 API 鉴权设置
+    
+    只有管理员可以修改此设置
+    """
+    # 只有管理员可以修改设置
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="只有管理员可以修改系统设置")
+    
+    service = SettingsService(db)
+    await service.set_api_auth_enabled(data.api_auth_enabled)
+    return ApiAuthSettingsResponse(api_auth_enabled=data.api_auth_enabled)

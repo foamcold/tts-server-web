@@ -50,3 +50,17 @@ class UserResponse(BaseModel):
 class MessageResponse(BaseModel):
     """通用消息响应"""
     message: str
+
+
+class ApiKeyResponse(BaseModel):
+    """API Key 响应"""
+    api_key: str = Field(..., description="API 密钥")
+
+    class Config:
+        from_attributes = True
+
+
+class ApiAuthStatusResponse(BaseModel):
+    """API 鉴权状态响应"""
+    auth_enabled: bool = Field(..., description="是否启用 API 鉴权")
+    api_key: str | None = Field(default=None, description="当前用户的 API Key（需登录）")
