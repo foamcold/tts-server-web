@@ -25,9 +25,7 @@ from ..plugins import (
 
 logger = logging.getLogger(__name__)
 
-# 默认缓存有效期（秒）
-# 设置为 0 禁用缓存，每次请求都从插件引擎获取最新的声音列表
-DEFAULT_CACHE_TTL = 0
+# 注意：缓存功能已迁移到前端浏览器，使用 React Query 内存缓存
 
 
 class PluginService:
@@ -49,7 +47,6 @@ class PluginService:
         """
         self.db = db
         self._manager = get_plugin_manager()
-        self._cache_ttl = DEFAULT_CACHE_TTL
 
     #==================== CRUD 操作 ====================
 
@@ -112,11 +109,6 @@ class PluginService:
         
         # 如果更新了代码或用户变量，需要重新加载插件
         if 'code' in update_data or 'user_vars' in update_data:
-            # 清除缓存
-            plugin.cached_locales = None
-            plugin.cached_voices = None
-            plugin.last_cache_time = None
-            # 重新加载插件
             await self.reload_plugin(plugin_db_id)
         
         await self.db.flush()
@@ -386,21 +378,20 @@ class PluginService:
         logger.debug(f"[DEBUG] PluginService.get_audio 成功: 音频大小={len(result.audio)} 字节")
         return result.audio
 
-    # ==================== 声音/语言列表（带缓存） ====================
+    # ==================== 声音/语言列表 ====================
+    # 注意：缓存功能已迁移到前端浏览器，使用 React Query 内存缓存
 
     async def get_voices(
         self,
         plugin_db_id: int,
-        locale: str = "",
-        use_cache: bool = True
+        locale: str = ""
     ) -> List[Dict[str, Any]]:
         """
-        获取插件支持的声音列表（带缓存）
+        获取插件支持的声音列表
         
         Args:
             plugin_db_id: 插件数据库 ID
             locale: 语言区域代码，为空获取所有声音
-            use_cache: 是否使用缓存
             
         Returns:
             声音列表，每个元素包含 id、name、locale 等字段
@@ -409,14 +400,6 @@ class PluginService:
         if not plugin:
             logger.warning(f"获取声音列表失败，插件不存在: {plugin_db_id}")
             return []
-        
-        # 检查缓存是否有效
-        if use_cache and self._is_cache_valid(plugin):
-            voices = plugin.cached_voices or []
-            if locale:
-                voices = [v for v in voices if v.get('locale') == locale]
-            logger.debug(f"使用缓存的声音列表: {plugin.plugin_id}")
-            return voices
         
         # 确保插件已加载
         if not await self.ensure_plugin_loaded(plugin_db_id):
@@ -435,23 +418,17 @@ class PluginService:
             for v in voices
         ]
         
-        # 如果没有指定 locale，更新缓存
-        if not locale:
-            await self._update_voices_cache(plugin, voice_dicts)
-        
         return voice_dicts
 
     async def get_locales(
         self,
-        plugin_db_id: int,
-        use_cache: bool = True
+        plugin_db_id: int
     ) -> List[Dict[str, Any]]:
         """
-        获取插件支持的语言列表（带缓存）
+        获取插件支持的语言列表
         
         Args:
             plugin_db_id: 插件数据库 ID
-            use_cache: 是否使用缓存
             
         Returns:
             语言列表，每个元素包含 code、name 字段
@@ -460,11 +437,6 @@ class PluginService:
         if not plugin:
             logger.warning(f"获取语言列表失败，插件不存在: {plugin_db_id}")
             return []
-        
-        # 检查缓存是否有效
-        if use_cache and self._is_cache_valid(plugin) and plugin.cached_locales:
-            logger.debug(f"使用缓存的语言列表: {plugin.plugin_id}")
-            return plugin.cached_locales
         
         # 确保插件已加载
         if not await self.ensure_plugin_loaded(plugin_db_id):
@@ -479,9 +451,6 @@ class PluginService:
             }
             for loc in locales
         ]
-        
-        # 更新缓存
-        await self._update_locales_cache(plugin, locale_dicts)
         
         return locale_dicts
 
@@ -524,33 +493,6 @@ class PluginService:
         logger.info(f"成功获取所有声音列表: {len(locale_codes)} 个语言, 详情: {voice_counts}")
         
         return {'locales': locale_codes, 'voices': voices}
-
-    async def refresh_cache(self, plugin_db_id: int) -> bool:
-        """
-        刷新插件的声音/语言缓存
-        
-        Args:
-            plugin_db_id: 插件数据库 ID
-            
-        Returns:刷新成功返回 True
-        """
-        plugin = await self.get_plugin_by_id(plugin_db_id)
-        if not plugin:
-            return False
-        
-        # 清除缓存
-        plugin.cached_locales = None
-        plugin.cached_voices = None
-        plugin.last_cache_time = None
-        
-        await self.db.flush()
-        
-        # 重新获取（不使用缓存）
-        await self.get_locales(plugin_db_id, use_cache=False)
-        await self.get_voices(plugin_db_id, use_cache=False)
-        
-        logger.info(f"已刷新插件缓存: {plugin.plugin_id}")
-        return True
 
     # ==================== 用户变量管理 ====================
 
@@ -671,53 +613,3 @@ class PluginService:
             defVars=plugin.def_vars,
             userVars=plugin.user_vars,
         )
-
-    def _is_cache_valid(self, plugin: Plugin) -> bool:
-        """
-        检查插件缓存是否有效
-        
-        Args:
-            plugin: 插件数据库模型
-            
-        Returns:
-            缓存有效返回 True
-        """
-        if not plugin.last_cache_time:
-            return False
-        
-        cache_age = datetime.utcnow() - plugin.last_cache_time
-        return cache_age.total_seconds() < self._cache_ttl
-
-    async def _update_locales_cache(
-        self,
-        plugin: Plugin,
-        locales: List[Dict[str, Any]]
-    ) -> None:
-        """
-        更新语言列表缓存
-        
-        Args:
-            plugin: 插件数据库模型
-            locales: 语言列表
-        """
-        plugin.cached_locales = locales
-        plugin.last_cache_time = datetime.utcnow()
-        await self.db.flush()
-        logger.debug(f"已更新语言缓存: {plugin.plugin_id}")
-
-    async def _update_voices_cache(
-        self,
-        plugin: Plugin,
-        voices: List[Dict[str, Any]]
-    ) -> None:
-        """
-        更新声音列表缓存
-        
-        Args:
-            plugin: 插件数据库模型
-            voices: 声音列表
-        """
-        plugin.cached_voices = voices
-        plugin.last_cache_time = datetime.utcnow()
-        await self.db.flush()
-        logger.debug(f"已更新声音缓存: {plugin.plugin_id}")

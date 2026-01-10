@@ -98,6 +98,9 @@ export function usePlugins() {
 
 /**
  * 获取插件声音列表
+ * 使用 React Query 内存缓存，避免重复请求
+ * 页面刷新后缓存自动清空
+ *
  * @param pluginId 插件ID
  */
 export function usePluginVoices(pluginId: number | undefined) {
@@ -125,6 +128,10 @@ export function usePluginVoices(pluginId: number | undefined) {
       }
     },
     enabled: !!pluginId,
+    // 内存缓存：5分钟内数据视为新鲜，不重新请求
+    staleTime: 5 * 60 * 1000,
+    // 缓存保留时间：30分钟
+    gcTime: 30 * 60 * 1000,
   })
 }
 

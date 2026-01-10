@@ -137,7 +137,7 @@ async def export_plugin(
     plugin = await service.get_plugin_by_id(plugin_id)
     if not plugin:
         raise HTTPException(status_code=404, detail="插件不存在")
-    returnPluginExport(json_data=service.export_plugin(plugin))
+    return PluginExport(json_data=service.export_plugin(plugin))
 
 
 # ==================== 运行时管理 ====================
@@ -268,17 +268,16 @@ async def get_plugin_voices(
 @router.get("/{plugin_id}/locales", response_model=List[PluginLocaleResponse])
 async def get_plugin_locales(
     plugin_id: int,
-    use_cache: bool = True,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """获取插件支持的语言列表"""
+    """获取插件支持的语言列表（缓存由前端浏览器管理）"""
     service = PluginService(db)
     plugin = await service.get_plugin_by_id(plugin_id)
     if not plugin:
         raise HTTPException(status_code=404, detail="插件不存在")
     
-    locales = await service.get_locales(plugin_id, use_cache=use_cache)
+    locales = await service.get_locales(plugin_id)
     return [PluginLocaleResponse(**loc) for loc in locales]
 
 
@@ -286,36 +285,17 @@ async def get_plugin_locales(
 async def get_plugin_voices_detail(
     plugin_id: int,
     locale: str = "",
-    use_cache: bool = True,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """获取插件声音列表（详细信息）"""
+    """获取插件声音列表（详细信息，缓存由前端浏览器管理）"""
     service = PluginService(db)
     plugin = await service.get_plugin_by_id(plugin_id)
     if not plugin:
         raise HTTPException(status_code=404, detail="插件不存在")
     
-    voices = await service.get_voices(plugin_id, locale=locale, use_cache=use_cache)
+    voices = await service.get_voices(plugin_id, locale=locale)
     return [PluginVoiceDetail(**v) for v in voices]
-
-
-@router.post("/{plugin_id}/cache/refresh", response_model=MessageResponse)
-async def refresh_plugin_cache(
-    plugin_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """刷新插件的声音/语言缓存"""
-    service = PluginService(db)
-    plugin = await service.get_plugin_by_id(plugin_id)
-    if not plugin:
-        raise HTTPException(status_code=404, detail="插件不存在")
-    
-    if await service.refresh_cache(plugin_id):
-        return MessageResponse(message="缓存已刷新")
-    else:
-        raise HTTPException(status_code=400, detail="缓存刷新失败")
 
 
 # ==================== 用户变量管理 ====================

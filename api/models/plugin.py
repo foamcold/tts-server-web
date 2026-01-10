@@ -31,16 +31,7 @@ class Plugin(Base):
         JSON, nullable=True, default=None, comment="用户自定义变量"
     )
     
-    # 缓存字段
-    cached_locales: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(
-        JSON, nullable=True, default=None, comment="缓存的语言列表"
-    )
-    cached_voices: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(
-        JSON, nullable=True, default=None, comment="缓存的声音列表"
-    )
-    last_cache_time: Mapped[Optional[datetime]] = mapped_column(
-        DateTime, nullable=True, default=None, comment="最后缓存时间"
-    )
+    # 注意：缓存字段已迁移到前端浏览器，使用 React Query 内存缓存
     
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
