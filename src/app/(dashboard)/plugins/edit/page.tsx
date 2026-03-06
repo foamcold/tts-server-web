@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 import { PageHeader } from '@/components/ui/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,8 +17,8 @@ import { toast } from 'sonner'
 
 export default function PluginEditPage() {
   const router = useRouter()
-  const params = useParams<{ id: string }>()
-  const pluginId = useMemo(() => Number(params?.id), [params])
+  const searchParams = useSearchParams()
+  const pluginId = useMemo(() => Number(searchParams.get('id') || ''), [searchParams])
   const { data: plugin, isLoading } = usePlugin(Number.isFinite(pluginId) ? pluginId : undefined)
   const updatePlugin = useUpdatePlugin()
 
@@ -76,10 +76,21 @@ export default function PluginEditPage() {
     return <PageLoading />
   }
 
+  if (!Number.isFinite(pluginId)) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="参数错误" description="请从插件列表进入编辑页。" />
+        <Button variant="outline" onClick={() => router.push('/plugins')}>
+          返回插件列表
+        </Button>
+      </div>
+    )
+  }
+
   if (!plugin) {
     return (
       <div className="space-y-6">
-        <PageHeader title="插件不存在" description="未找到对应插件" />
+        <PageHeader title="插件不存在" description="未找到对应插件。" />
         <Button variant="outline" onClick={() => router.push('/plugins')}>
           返回插件列表
         </Button>
@@ -90,7 +101,7 @@ export default function PluginEditPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`编辑插件 · ${plugin.name}`}
+        title={`编辑插件 | ${plugin.name}`}
         description="编辑插件基础信息、变量和原始代码"
         actions={
           <div className="flex gap-2">
