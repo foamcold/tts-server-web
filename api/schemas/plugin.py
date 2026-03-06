@@ -17,6 +17,7 @@ class PluginBase(BaseModel):
     icon_url: str = Field(default="", description="图标 URL")
     is_enabled: bool = Field(default=True, description="是否启用")
     user_vars: Dict[str, Any] = Field(default_factory=dict, description="用户变量")
+    def_vars: Dict[str, Any] = Field(default_factory=dict, description="默认变量")
 
 
 class PluginCreate(PluginBase):
@@ -34,12 +35,19 @@ class PluginUpdate(BaseModel):
     is_enabled: Optional[bool] = None
     order: Optional[int] = None
     user_vars: Optional[Dict[str, Any]] = None
+    def_vars: Optional[Dict[str, Any]] = None
 
 
 class PluginResponse(PluginBase):
     """插件响应"""
     id: int
     order: int
+    engine_type: str
+    compile_status: str
+    compile_error: str
+    capabilities: Dict[str, Any] = Field(default_factory=dict)
+    ui_schema: Dict[str, Any] = Field(default_factory=dict)
+    runtime_meta: Dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
@@ -47,6 +55,16 @@ class PluginResponse(PluginBase):
     @classmethod
     def parse_user_vars(cls, v: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
         """将 JSON 字符串反序列化为字典"""
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                return {}
+        return v if v is not None else {}
+
+    @field_validator('def_vars', 'capabilities', 'ui_schema', 'runtime_meta', mode='before')
+    @classmethod
+    def parse_json_dicts(cls, v: Union[str, Dict[str, Any], None]) -> Dict[str, Any]:
         if isinstance(v, str):
             try:
                 return json.loads(v)
@@ -81,6 +99,9 @@ class PluginVoicesResponse(BaseModel):
     """插件声音列表响应"""
     locales: List[str] = Field(..., description="支持的语言列表")
     voices: Dict[str, List[PluginVoice]] = Field(..., description="声音列表 {locale: voices}")
+    allVoices: List[PluginVoice] = Field(default_factory=list, description="全部声音列表")
+    capabilities: Dict[str, Any] = Field(default_factory=dict, description="插件能力")
+    ui_schema: Dict[str, Any] = Field(default_factory=dict, description="插件界面描述")
 
 
 class PluginAudioRequest(BaseModel):

@@ -11,6 +11,7 @@ import { z } from 'zod'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -131,6 +132,9 @@ export function ReplaceRuleDialog({
           <DialogTitle>
             {rule ? '编辑替换规则' : '新建替换规则'}
           </DialogTitle>
+          <DialogDescription>
+            设置规则名称、匹配文本、替换结果以及启用状态。
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

@@ -48,6 +48,9 @@ export interface Plugin {
   plugin_id: string
   name: string
   is_enabled: boolean
+  compile_status?: string
+  compile_error?: string
+  capabilities?: Record<string, unknown>
 }
 
 /**
@@ -69,6 +72,8 @@ export interface PluginVoices {
   voices: Record<string, PluginVoice[]>
   /** 所有声音的平铺列表，用于“全部”选项 */
   allVoices?: PluginVoice[]
+  capabilities?: Record<string, unknown>
+  ui_schema?: Record<string, unknown>
 }
 
 //==================== Query Hooks ====================

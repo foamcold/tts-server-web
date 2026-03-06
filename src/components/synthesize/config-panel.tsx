@@ -238,15 +238,16 @@ export function ConfigPanel({ config, onChange }: ConfigPanelProps) {
               <Skeleton className="h-10 w-full" />
             ) : (
               <Select
-                value={config.configId?.toString()}
+                value={config.configId?.toString() ?? '__none__'}
                 onValueChange={(value: string) =>
-                  onChange({ configId: parseInt(value) })
+                  onChange({ configId: value === '__none__' ? undefined : parseInt(value) })
                 }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="选择配置" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__none__">请选择配置</SelectItem>
                   {ttsConfigs?.filter((c: TtsConfig) => c.is_enabled)
                     .map((c: TtsConfig) => (
                       <SelectItem key={c.id} value={c.id.toString()}>
@@ -267,15 +268,16 @@ export function ConfigPanel({ config, onChange }: ConfigPanelProps) {
               <Skeleton className="h-10 w-full" />
             ) : (
               <Select
-                value={config.pluginId?.toString()}
+                value={config.pluginId?.toString() ?? '__none__'}
                 onValueChange={(value: string) =>
-                  onChange({ pluginId: parseInt(value) })
+                  onChange({ pluginId: value === '__none__' ? undefined : parseInt(value) })
                 }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="选择插件" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__none__">请选择插件</SelectItem>
                   {plugins
                     ?.filter((p: Plugin) => p.is_enabled)
                     .map((p: Plugin) => (

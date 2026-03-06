@@ -4,6 +4,8 @@
 """
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import text
+
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 
@@ -57,3 +59,27 @@ async def init_db():
     
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await _sync_plugin_columns(conn)
+
+
+async def _sync_plugin_columns(conn):
+    """为 SQLite 开发环境补齐插件新增字段"""
+    dialect = conn.dialect.name
+    if dialect != "sqlite":
+        return
+
+    result = await conn.execute(text("PRAGMA table_info(plugins)"))
+    columns = {row[1] for row in result.fetchall()}
+    additions = {
+        "engine_type": "ALTER TABLE plugins ADD COLUMN engine_type VARCHAR(50) DEFAULT 'native'",
+        "compile_status": "ALTER TABLE plugins ADD COLUMN compile_status VARCHAR(50) DEFAULT 'pending'",
+        "compile_error": "ALTER TABLE plugins ADD COLUMN compile_error TEXT DEFAULT ''",
+        "capabilities": "ALTER TABLE plugins ADD COLUMN capabilities JSON",
+        "ui_schema": "ALTER TABLE plugins ADD COLUMN ui_schema JSON",
+        "runtime_meta": "ALTER TABLE plugins ADD COLUMN runtime_meta JSON",
+        "raw_json": "ALTER TABLE plugins ADD COLUMN raw_json TEXT DEFAULT ''",
+        "compiled_at": "ALTER TABLE plugins ADD COLUMN compiled_at DATETIME",
+    }
+    for column_name, sql in additions.items():
+        if column_name not in columns:
+            await conn.execute(text(sql))

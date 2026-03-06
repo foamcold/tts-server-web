@@ -32,6 +32,7 @@ import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -148,6 +149,9 @@ function GroupDialog({
           <DialogTitle>
             {group ? '编辑分组' : '新建分组'}
           </DialogTitle>
+          <DialogDescription>
+            设置分组名称，用于整理和管理 TTS 配置。
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">

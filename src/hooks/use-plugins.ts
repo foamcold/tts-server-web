@@ -16,8 +16,15 @@ export interface Plugin {
   code: string
   icon_url: string
   is_enabled: boolean
+  def_vars: Record<string, unknown>
   user_vars: Record<string, unknown>
   order: number
+  engine_type: string
+  compile_status: string
+  compile_error: string
+  capabilities: Record<string, unknown>
+  ui_schema: Record<string, unknown>
+  runtime_meta: Record<string, unknown>
   created_at: string
   updated_at: string
 }
@@ -30,6 +37,7 @@ export interface PluginCreate {
   code: string
   icon_url?: string
   is_enabled?: boolean
+  def_vars?: Record<string, unknown>
   user_vars?: Record<string, unknown>
 }
 
@@ -41,6 +49,7 @@ export interface PluginUpdate {
   icon_url?: string
   is_enabled?: boolean
   order?: number
+  def_vars?: Record<string, unknown>
   user_vars?: Record<string, unknown>
 }
 
@@ -177,6 +186,29 @@ export function useTogglePlugin() {
     },
     onError: (error: Error) => {
       toast.error(error.message || '操作失败')
+    },
+  })
+}
+
+/**
+ * 更新插件用户变量
+ */
+export function useUpdatePluginUserVars() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, user_vars }: { id: number; user_vars: Record<string, unknown> }) =>
+      request<{ message: string }>({
+        method: 'PUT',
+        url: `/plugins/${id}/user-vars`,
+        data: { user_vars },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plugins'] })
+      toast.success('插件参数已保存')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || '保存失败')
     },
   })
 }

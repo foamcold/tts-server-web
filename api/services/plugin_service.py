@@ -1,86 +1,106 @@
-"""
+﻿"""
 插件服务
-
-管理插件的CRUD 操作和运行时管理。
-集成 PluginManager 和 PluginEngine 实现语音合成功能。
 """
+
+from __future__ import annotations
+
 import json
 import logging
-from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.plugin import Plugin
+from ..plugins import PluginAudioResult, PluginConfig, get_plugin_manager
+from ..plugins.native import PluginCompiler
 from ..schemas.plugin import PluginCreate, PluginUpdate
-from ..plugins import (
-    PluginManager,
-    PluginConfig,
-    PluginAudioResult,
-    PluginVoice,
-    PluginLocale,
-    get_plugin_manager,
-)
+from .settings_service import SettingsService
+from .upstream_controller import get_upstream_controller
 
 logger = logging.getLogger(__name__)
 
-# 注意：缓存功能已迁移到前端浏览器，使用 React Query 内存缓存
-
 
 class PluginService:
-    """
-    插件服务类
-    提供插件的 CRUD 操作和运行时管理功能，包括：
-    - 插件的增删改查
-    - 插件的加载/卸载
-    - 语音合成
-    - 声音/语言列表（带缓存）
-    """
+    """插件服务类"""
 
     def __init__(self, db: AsyncSession):
-        """
-        初始化插件服务
-        
-        Args:
-            db: 异步数据库会话
-        """
         self.db = db
         self._manager = get_plugin_manager()
-
-    #==================== CRUD 操作 ====================
+        self._compiler = PluginCompiler()
+        self._settings_service = SettingsService(db)
+        self._upstream_controller = get_upstream_controller()
 
     async def get_plugins(self) -> List[Plugin]:
-        """获取所有插件"""
-        stmt = select(Plugin).order_by(Plugin.order)
-        result = await self.db.execute(stmt)
+        result = await self.db.execute(select(Plugin).order_by(Plugin.order))
         return list(result.scalars().all())
 
     async def get_enabled_plugins(self) -> List[Plugin]:
-        """获取所有启用的插件"""
-        stmt = select(Plugin).where(Plugin.is_enabled == True).order_by(Plugin.order)
-        result = await self.db.execute(stmt)
+        result = await self.db.execute(select(Plugin).where(Plugin.is_enabled == True).order_by(Plugin.order))
         return list(result.scalars().all())
 
     async def get_plugin_by_id(self, plugin_id: int) -> Optional[Plugin]:
-        """通过数据库 ID 获取插件"""
-        stmt = select(Plugin).where(Plugin.id == plugin_id)
-        result = await self.db.execute(stmt)
+        result = await self.db.execute(select(Plugin).where(Plugin.id == plugin_id))
         return result.scalar_one_or_none()
 
     async def get_plugin_by_plugin_id(self, plugin_id: str) -> Optional[Plugin]:
-        """通过插件标识获取插件"""
-        stmt = select(Plugin).where(Plugin.plugin_id == plugin_id)
-        result = await self.db.execute(stmt)
+        result = await self.db.execute(select(Plugin).where(Plugin.plugin_id == plugin_id))
         return result.scalar_one_or_none()
 
-    async def create_plugin(self, data: PluginCreate) -> Plugin:
-        """创建插件"""
-        # 获取最大排序值
-        stmt = select(func.max(Plugin.order))
-        result = await self.db.execute(stmt)
-        max_order = result.scalar() or 0
+    def _normalize_import_payload(self, raw_json: str) -> Dict[str, Any]:
+        payload = json.loads(raw_json)
+        if isinstance(payload, list):
+            payload = payload[0]
+        return payload
 
+    def _compile_plugin_data(self, plugin_data: PluginCreate):
+        config = PluginConfig(
+            isEnabled=plugin_data.is_enabled,
+            version=plugin_data.version,
+            name=plugin_data.name,
+            pluginId=plugin_data.plugin_id,
+            author=plugin_data.author,
+            iconUrl=plugin_data.icon_url,
+            code=plugin_data.code,
+            defVars=getattr(plugin_data, "def_vars", {}) or {},
+            userVars=plugin_data.user_vars,
+        )
+        return self._compiler.compile(config)
+
+    def _apply_compile_result(self, plugin: Plugin, compile_result, raw_json: str, def_vars: Optional[Dict[str, Any]]) -> None:
+        plugin.engine_type = compile_result.engine_type
+        plugin.compile_status = compile_result.compile_status
+        plugin.compile_error = compile_result.compile_error
+        plugin.capabilities = compile_result.capabilities
+        plugin.ui_schema = compile_result.ui_schema
+        plugin.runtime_meta = compile_result.runtime_meta
+        plugin.raw_json = raw_json
+        plugin.def_vars = def_vars or {}
+        plugin.compiled_at = datetime.utcnow() if compile_result.compile_status == "success" else None
+
+    def _build_export_payload(self, plugin: Plugin) -> Dict[str, Any]:
+        return {
+            "isEnabled": plugin.is_enabled,
+            "version": plugin.version,
+            "name": plugin.name,
+            "pluginId": plugin.plugin_id,
+            "author": plugin.author,
+            "code": plugin.code,
+            "iconUrl": plugin.icon_url,
+            "defVars": plugin.def_vars or {},
+            "userVars": plugin.user_vars or {},
+        }
+
+    async def _sync_upstream_settings(self) -> None:
+        """在执行插件请求前同步上游连接设置到控制器"""
+
+        runtime_settings = await self._settings_service.get_upstream_runtime_settings()
+        self._upstream_controller.update_settings(runtime_settings)
+
+    async def create_plugin(self, data: PluginCreate, raw_json: Optional[str] = None, def_vars: Optional[Dict[str, Any]] = None) -> Plugin:
+        result = await self.db.execute(select(func.max(Plugin.order)))
+        max_order = result.scalar() or 0
         plugin = Plugin(
             plugin_id=data.plugin_id,
             name=data.name,
@@ -92,240 +112,147 @@ class PluginService:
             user_vars=data.user_vars,
             order=max_order + 1,
         )
+        compile_result = self._compile_plugin_data(data)
+        self._apply_compile_result(plugin, compile_result, raw_json or "", def_vars if def_vars is not None else data.def_vars)
         self.db.add(plugin)
         await self.db.flush()
         await self.db.refresh(plugin)
+        if plugin.is_enabled and plugin.compile_status == "success":
+            await self.load_plugin(plugin.id)
         return plugin
 
     async def update_plugin(self, plugin_db_id: int, data: PluginUpdate) -> Optional[Plugin]:
-        """更新插件"""
         plugin = await self.get_plugin_by_id(plugin_db_id)
         if not plugin:
             return None
-
         update_data = data.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(plugin, key, value)
-        
-        # 如果更新了代码或用户变量，需要重新加载插件
-        if 'code' in update_data or 'user_vars' in update_data:
-            await self.reload_plugin(plugin_db_id)
-        
+        if {"code", "user_vars", "name", "author", "version", "icon_url", "def_vars"} & set(update_data.keys()):
+            plugin_create = PluginCreate(
+                plugin_id=plugin.plugin_id,
+                name=plugin.name,
+                author=plugin.author,
+                version=plugin.version,
+                code=plugin.code,
+                icon_url=plugin.icon_url,
+                is_enabled=plugin.is_enabled,
+                user_vars=plugin.user_vars or {},
+                def_vars=plugin.def_vars or {},
+            )
+            compile_result = self._compile_plugin_data(plugin_create)
+            self._apply_compile_result(plugin, compile_result, plugin.raw_json or "", plugin.def_vars)
         await self.db.flush()
         await self.db.refresh(plugin)
+        await self.reload_plugin(plugin.id)
         return plugin
 
     async def delete_plugin(self, plugin_db_id: int) -> bool:
-        """删除插件"""
         plugin = await self.get_plugin_by_id(plugin_db_id)
-        if not plugin:
+        if plugin is None:
             return False
-        
-        # 先卸载插件
         await self.unload_plugin(plugin_db_id)
-        
         await self.db.delete(plugin)
+        await self.db.flush()
         return True
 
-    async def import_plugin(self, json_data: str) -> Plugin:
-        """从 JSON 导入插件"""
-        data = json.loads(json_data)
-        
-        # 处理数组格式
-        if isinstance(data, list):
-            data = data[0]
-        
+    async def import_plugin(self, raw_json: str) -> Plugin:
+        payload = self._normalize_import_payload(raw_json)
         plugin_data = PluginCreate(
-            plugin_id=data.get('pluginId', data.get('id', '')),
-            name=data.get('name', ''),
-            author=data.get('author', ''),
-            version=data.get('version',1),
-            code=data.get('code', ''),
-            icon_url=data.get('iconUrl', ''),
-            is_enabled=data.get('isEnabled', True),
-            user_vars=data.get('userVars', {}),)
-        
-        # 检查是否已存在
+            plugin_id=payload.get("pluginId", ""),
+            name=payload.get("name", ""),
+            author=payload.get("author", ""),
+            version=payload.get("version", 1),
+            code=payload.get("code", ""),
+            icon_url=payload.get("iconUrl", ""),
+            is_enabled=payload.get("isEnabled", True),
+            user_vars=payload.get("userVars", {}) or {},
+            def_vars=payload.get("defVars", {}) or {},
+        )
         existing = await self.get_plugin_by_plugin_id(plugin_data.plugin_id)
         if existing:
-            # 更新现有插件
-            return await self.update_plugin(existing.id, PluginUpdate(
-                name=plugin_data.name,
-                author=plugin_data.author,
-                version=plugin_data.version,
-                code=plugin_data.code,
-                icon_url=plugin_data.icon_url,
-            ))
-        
-        return await self.create_plugin(plugin_data)
+            return await self.update_plugin(existing.id, PluginUpdate(**plugin_data.model_dump()))
+        return await self.create_plugin(plugin_data, raw_json=raw_json, def_vars=plugin_data.def_vars)
 
-    def export_plugin(self, plugin: Plugin) -> str:
-        """导出插件为 JSON"""
-        return json.dumps([{
-            'isEnabled': plugin.is_enabled,
-            'version': plugin.version,
-            'name': plugin.name,
-            'pluginId': plugin.plugin_id,
-            'author': plugin.author,
-            'iconUrl': plugin.icon_url,
-            'code': plugin.code,
-            'userVars': plugin.user_vars or {},
-        }], ensure_ascii=False, indent=2)
+    async def export_plugin(self, plugin_db_id: int) -> Optional[Dict[str, Any]]:
+        plugin = await self.get_plugin_by_id(plugin_db_id)
+        if plugin is None:
+            return None
+        return self._build_export_payload(plugin)
 
-    # ==================== 运行时管理 ====================
+    def _build_plugin_config(self, plugin: Plugin) -> PluginConfig:
+        return PluginConfig(
+            isEnabled=plugin.is_enabled,
+            version=plugin.version,
+            name=plugin.name,
+            pluginId=plugin.plugin_id,
+            author=plugin.author,
+            iconUrl=plugin.icon_url,
+            code=plugin.code,
+            defVars=plugin.def_vars or {},
+            userVars=plugin.user_vars or {},
+            runtimeMeta=plugin.runtime_meta or {},
+        )
 
     async def load_plugin(self, plugin_db_id: int) -> bool:
-        """
-        加载插件到运行时
-        
-        Args:
-            plugin_db_id: 插件数据库 ID
-            
-        Returns:
-            加载成功返回 True，否则返回 False
-        """
         plugin = await self.get_plugin_by_id(plugin_db_id)
-        if not plugin:
-            logger.warning(f"加载失败，插件不存在: db_id={plugin_db_id}")
+        if plugin is None:
             return False
-        
-        if not plugin.is_enabled:
-            logger.warning(f"加载失败，插件未启用: {plugin.plugin_id}")
+        if plugin.compile_status != "success":
+            logger.warning("跳过加载编译失败的插件: %s", plugin.plugin_id)
             return False
-        
-        config = self._to_plugin_config(plugin)
-        result = self._manager.register(config)
-        
-        if result:
-            logger.info(f"插件加载成功: {plugin.plugin_id}")
-        else:
-            logger.error(f"插件加载失败: {plugin.plugin_id}")
-        
-        return result
+        return self._manager.register(self._build_plugin_config(plugin))
 
     async def unload_plugin(self, plugin_db_id: int) -> bool:
-        """
-        从运行时卸载插件
-        
-        Args:
-            plugin_db_id: 插件数据库 ID
-            
-        Returns:
-            卸载成功返回 True，否则返回 False
-        """
         plugin = await self.get_plugin_by_id(plugin_db_id)
-        if not plugin:
+        if plugin is None:
             return False
-        
-        result = self._manager.unregister(plugin.plugin_id)
-        
-        if result:
-            logger.info(f"插件卸载成功: {plugin.plugin_id}")
-        return result
+        return self._manager.unregister(plugin.plugin_id)
 
     async def reload_plugin(self, plugin_db_id: int) -> bool:
-        """
-        重新加载插件
-        
-        Args:
-            plugin_db_id: 插件数据库 ID
-            
-        Returns:
-            重新加载成功返回 True
-        """
         plugin = await self.get_plugin_by_id(plugin_db_id)
-        if not plugin:
+        if plugin is None:
             return False
-        
-        # 先卸载（如果已加载）
-        if self._manager.is_registered(plugin.plugin_id):
-            self._manager.unregister(plugin.plugin_id)
-        
-        # 如果插件启用，重新加载
-        if plugin.is_enabled:
+        self._manager.unregister(plugin.plugin_id)
+        if plugin.is_enabled and plugin.compile_status == "success":
             return await self.load_plugin(plugin_db_id)
-        
         return True
 
-    async def ensure_plugin_loaded(self, plugin_db_id: int) -> bool:
-        """
-        确保插件已加载
-        
-        如果插件未加载，则自动加载。
-        
-        Args:
-            plugin_db_id: 插件数据库 ID
-            
-        Returns:
-            插件已加载或加载成功返回 True
-        """
-        plugin = await self.get_plugin_by_id(plugin_db_id)
-        if not plugin:
-            return False
-        
-        if not self._manager.is_registered(plugin.plugin_id):
-            return await self.load_plugin(plugin_db_id)
-        
-        return True
+    async def load_all_enabled(self) -> int:
+        count = 0
+        for plugin in await self.get_enabled_plugins():
+            if await self.load_plugin(plugin.id):
+                count += 1
+        return count
 
-    # ==================== 语音合成 ====================
+    async def unload_all(self) -> int:
+        return self._manager.clear()
 
-    async def synthesize(self,
+    async def synthesize(
+        self,
         plugin_db_id: int,
         text: str,
         voice: str,
         locale: str = "zh-CN",
-        rate: int = 0,
-        pitch: int = 0,
-        volume: int = 0,
-        **kwargs
+        rate: int = 50,
+        pitch: int = 50,
+        volume: int = 50,
+        **kwargs: Any,
     ) -> PluginAudioResult:
-        """
-        使用指定插件合成音频
-        
-        Args:
-            plugin_db_id: 插件数据库 ID
-            text: 要合成的文本
-            voice: 声音 ID
-            locale: 语言区域代码，默认 "zh-CN"
-            rate: 语速（-100 到 100），0 为默认
-            pitch: 音调（-100 到 100），0 为默认
-            volume: 音量（0 到 100），0 为默认
-            **kwargs: 其他参数
-            
-        Returns:PluginAudioResult 对象，包含音频数据或错误信息
-        """
         plugin = await self.get_plugin_by_id(plugin_db_id)
-        if not plugin:
+        if plugin is None:
             return PluginAudioResult(error="插件不存在")
-        
-        if not plugin.is_enabled:
-            return PluginAudioResult(error="插件未启用")
-        
-        # 确保插件已加载
-        if not await self.ensure_plugin_loaded(plugin_db_id):
-            return PluginAudioResult(error="插件加载失败")
-        
-        # 执行合成
-        logger.debug(f"[DEBUG] PluginService.synthesize 开始调用_manager.synthesize")
-        logger.debug(f"[DEBUG] 参数: plugin_id={plugin.plugin_id}, text_len={len(text)}, voice={voice}, locale={locale}")
-        
-        result = await self._manager.synthesize(
+        if plugin.compile_status != "success":
+            return PluginAudioResult(error=plugin.compile_error or "插件尚未编译成功")
+        if not self._manager.is_registered(plugin.plugin_id):
+            await self.load_plugin(plugin.id)
+
+        await self._sync_upstream_settings()
+        return await self._upstream_controller.run(
             plugin.plugin_id,
-            text,
-            voice,
-            locale=locale,
-            rate=rate,
-            pitch=pitch,
-            volume=volume,
-            **kwargs
+            "语音合成",
+            lambda: self._manager.synthesize(plugin.plugin_id, text, voice, locale, rate, pitch, volume, **kwargs),
         )
-        
-        logger.debug(f"[DEBUG] PluginService.synthesize 结果: is_success={result.is_success()}, error={result.error}")
-        if result.is_success():
-            logger.debug(f"[DEBUG] 音频大小: {len(result.audio) if result.audio else 0} 字节")
-        
-        return result
 
     async def get_audio(
         self,
@@ -336,280 +263,84 @@ class PluginService:
         speed: int,
         volume: int,
         pitch: int,
-        extra_data: Dict = None
+        extra_data: Optional[Dict[str, Any]] = None,
     ) -> bytes:
-        """
-        通过插件获取音频（兼容旧接口）
-        
-        Args:
-            plugin_db_id: 插件数据库 ID
-            text: 要合成的文本
-            locale: 语言区域代码
-            voice: 声音 ID
-            speed: 语速
-            volume: 音量
-            pitch: 音调
-            extra_data: 额外数据
-            
-        Returns:
-            音频二进制数据
-        Raises:
-            ValueError: 插件不存在、未启用或合成失败
-        """
-        logger.debug(f"[DEBUG] PluginService.get_audio 开始: plugin_db_id={plugin_db_id}, text_len={len(text)}, voice={voice}")
-        
-        result = await self.synthesize(
-            plugin_db_id=plugin_db_id,
-            text=text,
-            voice=voice,
-            locale=locale,
-            rate=speed,
-            pitch=pitch,
-            volume=volume,
-            **(extra_data or {})
-        )
-        
-        logger.debug(f"[DEBUG] PluginService.get_audio 结果: is_success={result.is_success()}, error={result.error}")
-        
+        result = await self.synthesize(plugin_db_id, text, voice, locale, speed, pitch, volume, **(extra_data or {}))
         if not result.is_success():
-            logger.error(f"[DEBUG] PluginService.get_audio 失败: {result.error}")
-            raise ValueError(result.error or "音频合成失败")
-        
-        logger.debug(f"[DEBUG] PluginService.get_audio 成功: 音频大小={len(result.audio)} 字节")
-        return result.audio
+            raise ValueError(result.error or "合成失败")
+        return result.audio or b""
 
-    # ==================== 声音/语言列表 ====================
-    # 注意：缓存功能已迁移到前端浏览器，使用 React Query 内存缓存
-
-    async def get_voices(
-        self,
-        plugin_db_id: int,
-        locale: str = ""
-    ) -> List[Dict[str, Any]]:
-        """
-        获取插件支持的声音列表
-        
-        Args:
-            plugin_db_id: 插件数据库 ID
-            locale: 语言区域代码，为空获取所有声音
-            
-        Returns:
-            声音列表，每个元素包含 id、name、locale 等字段
-        """
+    async def get_locales(self, plugin_db_id: int) -> List[Dict[str, Any]]:
         plugin = await self.get_plugin_by_id(plugin_db_id)
-        if not plugin:
-            logger.warning(f"获取声音列表失败，插件不存在: {plugin_db_id}")
+        if plugin is None:
             return []
-        
-        # 确保插件已加载
-        if not await self.ensure_plugin_loaded(plugin_db_id):
-            return []
-        
-        # 获取声音列表
-        voices = await self._manager.get_voices(plugin.plugin_id, locale)
-        voice_dicts = [
-            {
-                'id': v.id,
-                'name': v.name,
-                'locale': v.locale,
-                'gender': v.gender,
-                'extra': v.extra,
-            }
-            for v in voices
-        ]
-        
-        return voice_dicts
+        if not self._manager.is_registered(plugin.plugin_id):
+            await self.load_plugin(plugin.id)
 
-    async def get_locales(
-        self,
-        plugin_db_id: int
-    ) -> List[Dict[str, Any]]:
-        """
-        获取插件支持的语言列表
-        
-        Args:
-            plugin_db_id: 插件数据库 ID
-            
-        Returns:
-            语言列表，每个元素包含 code、name 字段
-        """
+        await self._sync_upstream_settings()
+        locales = await self._upstream_controller.run(
+            plugin.plugin_id,
+            "语言列表加载",
+            lambda: self._manager.get_locales(plugin.plugin_id),
+        )
+        return [{"code": item.code, "name": item.name} for item in locales]
+
+    async def get_voices(self, plugin_db_id: int, locale: str = "") -> List[Dict[str, Any]]:
         plugin = await self.get_plugin_by_id(plugin_db_id)
-        if not plugin:
-            logger.warning(f"获取语言列表失败，插件不存在: {plugin_db_id}")
+        if plugin is None:
             return []
-        
-        # 确保插件已加载
-        if not await self.ensure_plugin_loaded(plugin_db_id):
-            return []
-        
-        # 获取语言列表
-        locales = await self._manager.get_locales(plugin.plugin_id)
-        locale_dicts = [
+        if not self._manager.is_registered(plugin.plugin_id):
+            await self.load_plugin(plugin.id)
+
+        await self._sync_upstream_settings()
+        voices = await self._upstream_controller.run(
+            plugin.plugin_id,
+            "发音人加载",
+            lambda: self._manager.get_voices(plugin.plugin_id, locale),
+        )
+        return [
             {
-                'code': loc.code,
-                'name': loc.name,
+                "id": voice.id,
+                "name": voice.name,
+                "locale": voice.locale,
+                "gender": voice.gender,
+                "extra": voice.extra or {},
             }
-            for loc in locales
+            for voice in voices
         ]
-        
-        return locale_dicts
 
     async def get_plugin_voices(self, plugin_db_id: int) -> Dict[str, Any]:
-        """
-        获取插件声音列表（兼容旧接口）
-        
-        返回格式与旧版接口兼容，包含 locales 和 voices 字段。
-        
-        Args:
-            plugin_db_id: 插件数据库 ID
-            
-        Returns:
-            包含 locales 和 voices 的字典
-            
-        Raises:
-            ValueError: 插件不存在
-        """
-        plugin = await self.get_plugin_by_id(plugin_db_id)
-        if not plugin:
-            raise ValueError("插件不存在")
-        
-        logger.info(f"获取插件声音列表: plugin_id={plugin_db_id}, plugin_name={plugin.name}")
-        
-        # 获取语言列表
         locales = await self.get_locales(plugin_db_id)
-        locale_codes = [loc['code'] for loc in locales]
-        
-        # 获取每个语言的声音列表
-        voices = {}
-        for locale_code in locale_codes:
-            locale_voices = await self.get_voices(plugin_db_id, locale=locale_code)
-            voices[locale_code] = [
-                {'code': v['id'], 'name': v['name']}
-                for v in locale_voices
-            ]
-        
-        # 记录调试日志：每个语言下有多少个发音人
-        voice_counts = {lang: len(v_list) for lang, v_list in voices.items()}
-        logger.info(f"成功获取所有声音列表: {len(locale_codes)} 个语言, 详情: {voice_counts}")
-        
-        return {'locales': locale_codes, 'voices': voices}
-
-    # ==================== 用户变量管理 ====================
-
-    async def update_user_vars(
-        self,
-        plugin_db_id: int,
-        user_vars: Dict[str, Any]
-    ) -> bool:
-        """
-        更新插件的用户变量
-        
-        Args:
-            plugin_db_id: 插件数据库 ID
-            user_vars: 用户变量字典
-            
-        Returns:
-            更新成功返回 True
-        """
+        voices = await self.get_voices(plugin_db_id)
+        grouped: Dict[str, List[Dict[str, Any]]] = {}
+        all_voices: List[Dict[str, Any]] = []
+        for voice in voices:
+            item = {
+                "code": voice["id"],
+                "name": voice["name"],
+                "icon_url": voice.get("extra", {}).get("icon_url", ""),
+            }
+            grouped.setdefault(voice["locale"], []).append(item)
+            all_voices.append(item)
+        response = {
+            "locales": [item["code"] for item in locales],
+            "voices": grouped,
+            "allVoices": all_voices,
+        }
         plugin = await self.get_plugin_by_id(plugin_db_id)
-        if not plugin:
+        if plugin:
+            response["capabilities"] = plugin.capabilities or {}
+            response["ui_schema"] = plugin.ui_schema or {}
+        return response
+
+    async def update_user_vars(self, plugin_db_id: int, user_vars: Dict[str, Any]) -> bool:
+        plugin = await self.get_plugin_by_id(plugin_db_id)
+        if plugin is None:
             return False
-        
         plugin.user_vars = user_vars
-        
-        # 如果插件已加载，需要重新加载以应用新变量
-        if self._manager.is_registered(plugin.plugin_id):
-            await self.reload_plugin(plugin_db_id)
-        
         await self.db.flush()
-        logger.info(f"已更新插件用户变量: {plugin.plugin_id}")
+        await self.reload_plugin(plugin_db_id)
         return True
 
-    # ==================== 批量操作 ====================
-
-    async def load_all_enabled(self) -> int:
-        """
-        加载所有启用的插件
-        
-        Returns:
-            成功加载的插件数量
-        """
-        plugins = await self.get_enabled_plugins()
-        count = 0
-        
-        for plugin in plugins:
-            try:
-                if await self.load_plugin(plugin.id):
-                    count += 1
-            except Exception as e:
-                logger.error(f"加载插件失败: {plugin.plugin_id},错误: {e}")
-        
-        logger.info(f"批量加载插件完成，共{count}/{len(plugins)} 个")
-        return count
-
-    async def unload_all(self) -> int:
-        """
-        卸载所有插件
-        
-        Returns:
-            卸载的插件数量
-        """
-        count = self._manager.unregister_all()
-        logger.info(f"批量卸载插件完成，共 {count} 个")
-        return count
-
-    # ==================== 状态查询 ====================
-
     def is_plugin_loaded(self, plugin_id: str) -> bool:
-        """
-        检查插件是否已加载
-        
-        Args:
-            plugin_id: 插件标识符（不是数据库 ID）
-            
-        Returns:
-            已加载返回 True
-        """
         return self._manager.is_registered(plugin_id)
-
-    def get_loaded_plugin_count(self) -> int:
-        """
-        获取已加载的插件数量
-        
-        Returns:
-            已加载的插件数量
-        """
-        return self._manager.get_plugin_count()
-
-    def list_loaded_plugins(self) -> List[str]:
-        """
-        列出所有已加载的插件 ID
-        
-        Returns:
-            插件 ID 列表
-        """
-        return self._manager.list_plugins()
-
-    # ==================== 私有方法 ====================
-
-    def _to_plugin_config(self, plugin: Plugin) -> PluginConfig:
-        """
-        将数据库模型转换为 PluginConfig
-        
-        Args:
-            plugin: 插件数据库模型
-            
-        Returns:
-            PluginConfig 配置对象
-        """
-        return PluginConfig(
-            isEnabled=plugin.is_enabled,
-            version=plugin.version,
-            name=plugin.name,
-            pluginId=plugin.plugin_id,
-            author=plugin.author,
-            iconUrl=plugin.icon_url or "",
-            code=plugin.code,
-            defVars=plugin.def_vars,
-            userVars=plugin.user_vars,
-        )

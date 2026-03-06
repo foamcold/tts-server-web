@@ -2,7 +2,7 @@
 插件模型
 """
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from sqlalchemy import String, Boolean, Integer, Text, DateTime, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,6 +30,21 @@ class Plugin(Base):
     user_vars: Mapped[Optional[Dict[str, Any]]] = mapped_column(
         JSON, nullable=True, default=None, comment="用户自定义变量"
     )
+
+    engine_type: Mapped[str] = mapped_column(String(50), default="native", comment="运行引擎类型")
+    compile_status: Mapped[str] = mapped_column(String(50), default="pending", comment="编译状态")
+    compile_error: Mapped[str] = mapped_column(Text, default="", comment="编译错误")
+    capabilities: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSON, nullable=True, default=None, comment="插件能力描述"
+    )
+    ui_schema: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSON, nullable=True, default=None, comment="插件界面描述"
+    )
+    runtime_meta: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSON, nullable=True, default=None, comment="插件运行元数据"
+    )
+    raw_json: Mapped[str] = mapped_column(Text, default="", comment="原始插件 JSON")
+    compiled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, comment="编译完成时间")
     
     # 注意：缓存字段已迁移到前端浏览器，使用 React Query 内存缓存
     

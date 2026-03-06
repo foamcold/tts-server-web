@@ -1,16 +1,17 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
-import { cn } from '@/lib/utils'
-import { PageHeader } from '@/components/ui/page-header'
+
+import { ApiKeyForm, CacheSettingsForm, PasswordForm, ProfileForm, UpstreamSettingsForm } from '@/components/settings'
 import { Button } from '@/components/ui/button'
 import { Icons } from '@/components/ui/icons'
-import { ProfileForm, PasswordForm, CacheSettingsForm, ApiKeyForm } from '@/components/settings'
+import { PageHeader } from '@/components/ui/page-header'
+import { cn } from '@/lib/utils'
 
 /**
  * 设置页面标签类型
  */
-type SettingsTab = 'profile' | 'security' | 'apikey' | 'cache'
+type SettingsTab = 'profile' | 'security' | 'apikey' | 'cache' | 'upstream'
 
 /**
  * 标签配置
@@ -40,26 +41,30 @@ const tabs: { id: SettingsTab; label: string; icon: keyof typeof Icons; descript
     icon: 'database',
     description: '管理音频缓存配置',
   },
+  {
+    id: 'upstream',
+    label: '上游连接',
+    icon: 'zap',
+    description: '配置上游请求策略与容错行为',
+  },
 ]
 
 /**
  * 设置页面
- * 提供个人资料和安全设置的管理界面
+ * 提供个人资料、安全设置、缓存和上游连接配置
  */
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
 
   return (
     <div className="space-y-6">
-      {/* 页面标题 */}
       <PageHeader
         title="设置"
-        description="管理个人资料、安全设置和缓存配置"
+        description="管理个人资料、安全设置、缓存配置和上游连接策略"
       />
 
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* 侧边导航 */}
-        <nav className="w-full lg:w-56 shrink-0 space-y-1">
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <nav className="w-full shrink-0 space-y-1 lg:w-56">
           {tabs.map((tab) => {
             const Icon = Icons[tab.icon]
             const isActive = activeTab === tab.id
@@ -67,30 +72,25 @@ export default function SettingsPage() {
               <Button
                 key={tab.id}
                 variant={isActive ? 'secondary' : 'ghost'}
-                className={cn(
-                  'w-full justify-start h-auto py-3 px-4',
-                  isActive && 'bg-muted'
-                )}
+                className={cn('h-auto w-full justify-start px-4 py-3', isActive && 'bg-muted')}
                 onClick={() => setActiveTab(tab.id)}
               >
                 <Icon className="mr-3 h-4 w-4 shrink-0" />
                 <div className="text-left">
                   <div className="font-medium">{tab.label}</div>
-                  <div className="text-xs text-muted-foreground font-normal">
-                    {tab.description}
-                  </div>
+                  <div className="text-xs font-normal text-muted-foreground">{tab.description}</div>
                 </div>
               </Button>
             )
           })}
         </nav>
 
-        {/* 内容区域 */}
-        <div className="flex-1 max-w-2xl">
+        <div className="max-w-2xl flex-1">
           {activeTab === 'profile' && <ProfileForm />}
           {activeTab === 'security' && <PasswordForm />}
           {activeTab === 'apikey' && <ApiKeyForm />}
           {activeTab === 'cache' && <CacheSettingsForm />}
+          {activeTab === 'upstream' && <UpstreamSettingsForm />}
         </div>
       </div>
     </div>

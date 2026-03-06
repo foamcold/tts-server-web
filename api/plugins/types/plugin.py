@@ -53,6 +53,7 @@ class PluginConfig:
     code: str = ""
     defVars: Optional[Dict[str, Any]] = None
     userVars: Optional[Dict[str, Any]] = None
+    runtimeMeta: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
         """初始化后处理"""
@@ -60,6 +61,8 @@ class PluginConfig:
             self.defVars = {}
         if self.userVars is None:
             self.userVars = {}
+        if self.runtimeMeta is None:
+            self.runtimeMeta = {}
 
     def get_merged_vars(self) -> Dict[str, Any]:
         """

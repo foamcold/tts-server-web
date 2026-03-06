@@ -55,17 +55,37 @@ export function PluginCard({
 
           {/* 信息 */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold truncate">{plugin.name}</h3>
-              <Badge variant="secondary" className="text-xs">
-                v{plugin.version}
-              </Badge>
-            </div><p className="text-sm text-muted-foreground truncate">
-              {plugin.author || '未知作者'}
-            </p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold truncate">{plugin.name}</h3>
+                <p className="text-sm text-muted-foreground truncate mt-1">
+                  {plugin.author || '未知作者'}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Badge variant="secondary" className="text-xs">
+                  v{plugin.version}
+                </Badge>
+                <Badge
+                  variant={plugin.compile_status === 'success' ? 'outline' : 'destructive'}
+                  className={cn(
+                    'text-xs whitespace-nowrap',
+                    plugin.compile_status === 'success' && 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  )}
+                >
+                  {plugin.compile_status === 'success' ? '已编译' : '编译失败'}
+                </Badge>
+              </div>
+            </div>
             <p className="text-xs text-muted-foreground mt-1">
               ID: {plugin.plugin_id}
             </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              引擎: {plugin.engine_type || 'native'}
+            </p>
+            {plugin.compile_error ? (
+              <p className="text-xs text-destructive mt-2 line-clamp-2">{plugin.compile_error}</p>
+            ) : null}
           </div>
 
           {/* 操作*/}

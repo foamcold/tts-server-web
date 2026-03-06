@@ -11,6 +11,7 @@ import { z } from 'zod'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -184,6 +185,9 @@ export function ConfigDialog({
           <DialogTitle>
             {config ? '编辑配置' : '新建配置'}
           </DialogTitle>
+          <DialogDescription>
+            配置 TTS 来源、插件、语言、声音以及合成参数。
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -232,9 +236,9 @@ export function ConfigDialog({
             <div className="space-y-2">
               <Label>选择插件</Label>
               <Select
-                value={pluginId}
+                value={pluginId || '__none__'}
                 onValueChange={(value: string) => {
-                  setValue('plugin_id', value)
+                  setValue('plugin_id', value === '__none__' ? '' : value)
                     setValue('voice', '')
                   setValue('voice_name', '')
                 }}
@@ -243,6 +247,7 @@ export function ConfigDialog({
                   <SelectValue placeholder="选择插件" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__none__">请选择插件</SelectItem>
                   {plugins
                     ?.filter((p: Plugin) => p.is_enabled)
                     .map((p: Plugin) => (

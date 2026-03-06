@@ -382,3 +382,41 @@ export function formatFileSize(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
+/**
+ * 上游连接设置接口
+ */
+export interface UpstreamSettings {
+  connection_mode: 'concurrent' | 'queue' | 'replace'
+  timeout_seconds: number
+  retry_count: number
+}
+
+/**
+ * 获取上游连接设置
+ */
+export function useUpstreamSettings() {
+  return useQuery({
+    queryKey: ['upstreamSettings'],
+    queryFn: () => request<UpstreamSettings>({ url: '/settings/upstream' }),
+    staleTime: 30 * 1000,
+  })
+}
+
+/**
+ * 更新上游连接设置
+ */
+export function useUpdateUpstreamSettings() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: UpstreamSettings) =>
+      request<UpstreamSettings>({ method: 'PUT', url: '/settings/upstream', data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['upstreamSettings'] })
+      toast.success('上游连接设置已更新')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || '更新失败')
+    },
+  })
+}
